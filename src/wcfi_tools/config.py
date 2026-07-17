@@ -22,14 +22,16 @@ KEYRING_SERVICE = "wcfi"
 SECRET_ENV_VARS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "huggingface": "HF_TOKEN",  # for pyannote speaker diarization
 }
 
 DEFAULT_CONFIG: dict[str, dict[str, str]] = {
-    "providers": {"summarizer": "openai", "transcriber": "openai"},
+    "providers": {"summarizer": "openai", "transcriber": "openai", "diarizer": "pyannote"},
     "models": {
         "openai_summary": "gpt-5.5",
         "anthropic_summary": "claude-sonnet-5",
         "transcribe": "gpt-4o-transcribe",
+        "diarize": "pyannote/speaker-diarization-3.1",
     },
 }
 

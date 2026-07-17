@@ -16,7 +16,8 @@ from typing import Any, Callable
 
 from ..core import ffmpeg
 from ..providers.base import Summarizer, Transcriber
-from . import artifacts, schemas
+from ..providers.diarize import DiarTurn, Diarizer
+from . import artifacts, schemas, speakers
 
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".mp4", ".mpeg", ".mpga", ".webm"}
 WORK_DIR_NAME = "_work"
@@ -24,6 +25,8 @@ WORK_DIR_NAME = "_work"
 # "_minutes_work" name used by the original script so old caches aren't picked up as inputs.
 WORK_DIR_NAMES = {"_work", "_minutes_work"}
 Progress = Callable[[str, int, int], None]
+# Receives {speaker: [snippet paths]} and {speaker: seconds}; returns {speaker: name}.
+Identify = Callable[[dict[str, list[Path]], dict[str, float]], dict[str, str]]
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class PipelineResult:
     minutes_markdown: str
     atomic_summary: dict[str, Any]
     artifacts: dict[str, Path] = field(default_factory=dict)
+    roster: dict[str, str] = field(default_factory=dict)
 
 
 def summarize_meeting(
@@ -62,6 +66,8 @@ def summarize_meeting(
     reasoning_effort: str = "low",
     emit: tuple[str, ...] = ("md", "paste"),
     force: bool = False,
+    diarizer: Diarizer | None = None,
+    identify: Identify | None = None,
     on_progress: Progress | None = None,
 ) -> PipelineResult:
     meeting_dir = meeting_dir.resolve()
@@ -86,8 +92,15 @@ def summarize_meeting(
     transcript_items = transcribe_chunks(chunks, transcriber, work_dir, force, on_progress)
     _write_text(work_dir / "transcript.md", _render_transcript_md(transcript_items))
 
+    roster: dict[str, str] = {}
+    roster_note = ""
+    if diarizer is not None and identify is not None:
+        roster, roster_note = _run_attribution(audio_files, diarizer, identify, work_dir, on_progress)
+        if roster:
+            _write_json(work_dir / "speakers.json", roster)
+
     chunk_atomics = extract_chunk_atomics(
-        chunks, transcript_items, summarizer, work_dir, reasoning_effort, force, on_progress
+        chunks, transcript_items, summarizer, work_dir, reasoning_effort, force, on_progress, roster_note
     )
     final_atomic = consolidate(chunk_atomics, meeting_date, summarizer, work_dir, reasoning_effort, force)
     _write_json(work_dir / "atomic_summary.json", final_atomic)
@@ -95,7 +108,7 @@ def summarize_meeting(
 
     minutes_md = generate_minutes(
         final_atomic, meeting_dir, audio_files, meeting_date, meeting_time,
-        location, prepared_by, summarizer, reasoning_effort,
+        location, prepared_by, summarizer, reasoning_effort, roster_note,
     )
 
     result = PipelineResult(
@@ -105,6 +118,7 @@ def summarize_meeting(
         minutes_path=meeting_dir / "minutes.md",
         minutes_markdown=minutes_md,
         atomic_summary=final_atomic,
+        roster=roster,
     )
 
     if "md" in emit or "all" in emit:
@@ -192,6 +206,7 @@ def transcribe_chunks(
 def extract_chunk_atomics(
     chunks: list[ChunkRecord], transcript_items: list[dict[str, Any]], summarizer: Summarizer,
     work_dir: Path, reasoning_effort: str, force: bool, on_progress: Progress | None,
+    roster_note: str = "",
 ) -> list[dict[str, Any]]:
     adir = work_dir / "atomic_chunks"
     adir.mkdir(parents=True, exist_ok=True)
@@ -208,6 +223,7 @@ def extract_chunk_atomics(
                 f"Source chunk: {record.chunk_id}\nSource audio: {record.source_audio_rel}\n"
                 f"Time range: {_fmt(record.start_seconds)} - {_fmt(record.end_seconds)}\n\n"
                 f"Transcript:\n{text or '[empty transcript]'}"
+                + (f"\n\n{roster_note}" if roster_note else "")
             )
             data = summarizer.structured_json(
                 system=schemas.atomic_extraction_system_prompt(), user=user,
@@ -242,7 +258,7 @@ def consolidate(
 def generate_minutes(
     atomic_summary: dict[str, Any], meeting_dir: Path, audio_files: list[Path],
     meeting_date: str, meeting_time: str, location: str, prepared_by: str,
-    summarizer: Summarizer, reasoning_effort: str,
+    summarizer: Summarizer, reasoning_effort: str, roster_note: str = "",
 ) -> str:
     recordings = ", ".join(a.name for a in audio_files) or "Not explicitly captured"
     user = (
@@ -256,8 +272,9 @@ def generate_minutes(
         "Metadata defaults unless contradicted by the atomic summary:\n"
         f"- Meeting Date: {meeting_date}\n- Meeting Time: {meeting_time}\n- Meeting Location: {location}\n"
         f"- Audio/Video Recording File: {recordings}\n- Minutes Prepared By: {prepared_by}\n\n"
-        "Atomic summary JSON:\n"
-        f"{json.dumps(atomic_summary, ensure_ascii=False, indent=2)}"
+        + (roster_note + "\n\n" if roster_note else "")
+        + "Atomic summary JSON:\n"
+        + json.dumps(atomic_summary, ensure_ascii=False, indent=2)
     )
     data = summarizer.structured_json(
         system=schemas.minutes_system_prompt(), user=user,
@@ -268,6 +285,28 @@ def generate_minutes(
     if not markdown:
         raise RuntimeError("The summarizer returned an empty minutes markdown field.")
     return markdown
+
+
+def _run_attribution(
+    audio_files: list[Path], diarizer: Diarizer, identify: Identify, work_dir: Path,
+    on_progress: Progress | None,
+) -> tuple[dict[str, Any], str]:
+    """Diarize each audio file, cut snippets, ask the caller to name speakers, return (roster, note)."""
+    all_snippets: dict[str, list[Path]] = {}
+    all_durations: dict[str, float] = {}
+    multi = len(audio_files) > 1
+    for idx, audio in enumerate(audio_files, 1):
+        _emit(on_progress, "diarize", idx, len(audio_files))
+        turns = diarizer.diarize(audio)
+        if multi:
+            prefix = Path(audio).stem[:12]
+            turns = [DiarTurn(f"{t.speaker} ({prefix})", t.start, t.end) for t in turns]
+        all_durations.update(speakers.speaker_durations(turns))
+        all_snippets.update(speakers.select_snippets(audio, turns, work_dir))
+    if not all_snippets:
+        return {}, ""
+    roster = identify(all_snippets, all_durations) or {}
+    return roster, speakers.roster_context(roster)
 
 
 # --- helpers -----------------------------------------------------------------

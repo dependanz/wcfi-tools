@@ -23,6 +23,13 @@ You also need **ffmpeg** and **ffprobe** on your `PATH` (used to chunk audio):
 - macOS: `brew install ffmpeg`
 - Debian/Ubuntu: `sudo apt install ffmpeg`
 
+For **speaker attribution**, install the (heavy, torch-based) extra and get a free HuggingFace
+token, then accept the terms for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1):
+
+```bash
+pip install "wcfi-tools[speaker]"
+```
+
 ## Setup
 
 ```bash
@@ -48,6 +55,8 @@ Options:
 --emit {md,paste,all}           Which artifacts to write (default all)
 --force                         Rebuild cached chunks/transcripts/summaries
 --dry-run                       Discover inputs & estimate chunks; no API calls
+--identify-speakers             Attribute speakers by name (prompts if unset)
+--diarizer {pyannote|window}    Diarization backend (window = dev stub, no token)
 ```
 
 Outputs (written into the meeting folder):
@@ -55,6 +64,20 @@ Outputs (written into the meeting folder):
 - `minutes.md` — finalized minutes (headings, tables, bullets)
 - `paste-block.txt` — plain, section-by-section text for pasting into a styled template
 - `_work/` — cached transcripts and intermediate facts (resumable; re-runs don't re-bill)
+
+### Speaker attribution (prototype)
+
+`summarize` can put **names** on the people in the meeting. If you opt in (it prompts, or pass
+`--identify-speakers`), it:
+
+1. **diarizes** the audio into distinct voices (via `pyannote.audio`),
+2. cuts a few clips per voice and opens a **local web page** in your browser,
+3. lets you play each clip and say **who is speaking** (or mark **Unsure**),
+4. feeds the resulting roster into the minutes — so **Attendance** and motion movers/seconders
+   are accurate instead of guessed.
+
+Needs the speaker extra and a (free) HuggingFace token — see Install and `wcfi setup`. For a quick
+UI test without either, use the dev stub: `--identify-speakers --diarizer window`.
 
 ## Configuration & secrets
 
@@ -76,12 +99,11 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- **Speaker identification** — `wcfi meeting summarize` will ask whether you want speakers
-  named. If yes, it plays short snippets and you annotate who is speaking; the transcript is
-  then attributed by name (making attendance, movers, and seconders far more reliable).
-- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from labeled samples so
-  identification can carry across meetings.
-- Longer term, the same UI-agnostic core can back a web or desktop front-end.
+- **Speaker identification** — ✅ prototype landed (diarize → local web annotator → named minutes).
+  Next: robustness on real multi-speaker room audio, and word-level "who said what".
+- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from the labeled snippets so
+  future meetings auto-match known voices and only ask about new/unsure ones.
+- Longer term, the same UI-agnostic core (incl. the annotator) can back a hosted web/desktop app.
 
 ## License
 

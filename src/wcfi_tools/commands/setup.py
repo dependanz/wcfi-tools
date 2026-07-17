@@ -6,7 +6,7 @@ import shutil
 
 import typer
 from rich.console import Console
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 
 from .. import config as cfg
 
@@ -46,14 +46,16 @@ def _ensure_key(provider: str) -> bool:
         return True
     env = cfg.SECRET_ENV_VARS.get(provider, provider.upper())
     console.print(f"  {provider} key not found.")
-    key = Prompt.ask(f"  Paste your {provider} API key", password=True).strip()
+    key = Prompt.ask(f"  Paste your {provider} key", password=True).strip()
     if not key:
-        console.print(f"  [yellow]Skipped[/] — set {env} later or re-run `wcfi setup`.")
+        console.print(f"  [yellow]Skipped[/] - set {env} later or re-run `wcfi setup`.")
         return False
-    ok, msg = _VALIDATORS[provider](key)
-    if not ok:
-        console.print(f"  [red]Key failed validation:[/] {msg}")
-        return False
+    validator = _VALIDATORS.get(provider)
+    if validator:
+        ok, msg = validator(key)
+        if not ok:
+            console.print(f"  [red]Key failed validation:[/] {msg}")
+            return False
     if cfg.set_secret(provider, key):
         console.print(f"  [green]OK[/] {provider} key validated and stored in the OS keyring.")
     else:
@@ -84,7 +86,7 @@ def setup(
         console.print(f"  config file : {cfg.config_path()}")
         console.print(f"  summarizer  : {config['providers']['summarizer']}")
         console.print(f"  transcriber : {config['providers'].get('transcriber', 'openai')}")
-        for provider in ("openai", "anthropic"):
+        for provider in ("openai", "anthropic", "huggingface"):
             src = cfg.secret_source(provider)
             state = f"[green]set[/] (via {src})" if src else "[yellow]not set[/]"
             console.print(f"  {provider:<10}: {state}")
@@ -105,6 +107,12 @@ def setup(
     _ensure_key("openai")  # always needed for transcription
     if summarizer == "anthropic":
         _ensure_key("anthropic")
+
+    console.print("\n[bold]Speaker identification[/] (optional)")
+    if Confirm.ask("Set up local speaker diarization (pyannote)?", default=False):
+        _ensure_key("huggingface")
+        console.print('  [dim]Also: pip install "wcfi-tools[speaker]" and accept the model terms at[/]')
+        console.print("  [dim]https://huggingface.co/pyannote/speaker-diarization-3.1[/]")
 
     console.print("\n[bold]System check[/]")
     _check_ffmpeg()
