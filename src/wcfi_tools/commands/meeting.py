@@ -12,6 +12,7 @@ from tqdm import tqdm
 from .. import config as cfg
 from ..core import ffmpeg
 from ..core.ffmpeg import ToolNotFound
+from ..guards import require_configured
 from ..meeting import summarize_meeting
 from ..meeting.pipeline import derive_meeting_date, discover_audio
 from ..providers import ProviderError, build_summarizer, build_transcriber
@@ -58,6 +59,7 @@ def summarize(
     reasoning_effort: str = typer.Option("low", "--reasoning-effort"),
 ) -> None:
     """Turn a folder of meeting audio into copy-able minutes artifacts."""
+    require_configured()  # `wcfi setup` must be run first
     folder = folder.resolve()
     if not folder.is_dir():
         console.print(f"[red]Folder does not exist:[/] {folder}")
