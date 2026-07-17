@@ -84,6 +84,7 @@ def setup(
     if check:
         console.print("[bold]wcfi configuration[/]")
         console.print(f"  config file : {cfg.config_path()}")
+        console.print(f"  configured  : {'[green]yes[/]' if cfg.is_configured() else '[red]no — run wcfi setup[/]'}")
         console.print(f"  summarizer  : {config['providers']['summarizer']}")
         console.print(f"  transcriber : {config['providers'].get('transcriber', 'openai')}")
         for provider in ("openai", "anthropic", "huggingface"):
@@ -117,6 +118,7 @@ def setup(
     console.print("\n[bold]System check[/]")
     _check_ffmpeg()
 
+    config.setdefault("meta", {})["configured"] = True
     path = cfg.save_config(config)
     console.print(f"\n[green]Saved[/] config to {path}")
     console.print("Try it: [bold]wcfi meeting summarize <folder>[/]  (or add --dry-run first)")

@@ -44,6 +44,19 @@ def config_path() -> Path:
     return config_dir() / "config.toml"
 
 
+def is_configured() -> bool:
+    """True only after `wcfi setup` has completed successfully (it writes meta.configured)."""
+    path = config_path()
+    if not path.exists():
+        return False
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except Exception:  # pragma: no cover - treat an unreadable config as not configured
+        return False
+    return bool(data.get("meta", {}).get("configured", False))
+
+
 def load_config() -> dict[str, Any]:
     """Load config from disk, merged over defaults. Also loads ``.env`` into the environment."""
     load_dotenv()  # merges .env into os.environ if present in CWD or parents

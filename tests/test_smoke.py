@@ -49,3 +49,21 @@ def test_paste_block_flattens_table_and_emphasis():
     assert "Meeting Date | Jul 12, 2026" in out
     assert "**" not in out
     assert "---" not in out
+
+
+def test_is_configured_roundtrip(monkeypatch, tmp_path):
+    import wcfi_tools.config as cfg
+
+    monkeypatch.setattr(cfg, "config_path", lambda: tmp_path / "config.toml")
+    assert cfg.is_configured() is False
+    cfg.save_config({"meta": {"configured": True}})
+    assert cfg.is_configured() is True
+
+
+def test_meeting_requires_setup(monkeypatch, tmp_path):
+    import wcfi_tools.config as cfg
+
+    monkeypatch.setattr(cfg, "config_path", lambda: tmp_path / "config.toml")  # no config -> not set up
+    result = runner.invoke(app, ["meeting", "summarize", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "not set up" in result.output

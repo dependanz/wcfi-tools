@@ -32,6 +32,8 @@ pip install "wcfi-tools[speaker]"
 
 ## Setup
 
+**Required first** — `wcfi meeting …` won't run until setup has completed once.
+
 ```bash
 wcfi setup            # interactive: pick providers, paste keys (masked + validated)
 wcfi setup --check    # verify configuration without changing anything (doctor mode)
