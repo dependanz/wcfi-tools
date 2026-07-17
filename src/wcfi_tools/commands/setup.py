@@ -6,7 +6,7 @@ import shutil
 
 import typer
 from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Prompt
 
 from .. import config as cfg
 
@@ -89,7 +89,7 @@ def setup(
         console.print(f"  configured  : {'[green]yes[/]' if cfg.is_configured() else '[red]no — run wcfi setup[/]'}")
         console.print(f"  summarizer  : {config['providers']['summarizer']}")
         console.print(f"  transcriber : {config['providers'].get('transcriber', 'openai')}")
-        for provider in ("openai", "anthropic", "huggingface"):
+        for provider in ("openai", "anthropic"):
             src = cfg.secret_source(provider)
             state = f"[green]set[/] (via {src})" if src else "[yellow]not set[/]"
             console.print(f"  {provider:<10}: {state}")
@@ -110,25 +110,6 @@ def setup(
     _ensure_key("openai")  # always needed for transcription
     if summarizer == "anthropic":
         _ensure_key("anthropic")
-
-    console.print("\n[bold]Speaker identification[/] (optional)")
-    console.print(
-        "  Puts names on speakers in the minutes (accurate Attendance + movers/seconders).\n"
-        "  It runs the local pyannote model, which needs a [bold]free HuggingFace token[/] and a\n"
-        "  one-time acceptance of the model's terms."
-    )
-    if Confirm.ask("Set it up now?", default=False):
-        console.print(
-            "\n  [bold]How to get the token (takes ~2 min):[/]\n"
-            "   1. Sign in or create a free account:  https://huggingface.co/join\n"
-            "   2. Open each model page below and click [bold]'Agree and access repository'[/]:\n"
-            "        https://huggingface.co/pyannote/speaker-diarization-3.1\n"
-            "        https://huggingface.co/pyannote/segmentation-3.0\n"
-            "   3. Create an access token (Role: [bold]Read[/]):  https://huggingface.co/settings/tokens\n"
-            "   4. Install the model runtime:  pip install \"wcfi-tools[speaker]\"\n"
-            "  Then paste the token below (it's stored in your OS keyring, never shown again).\n"
-        )
-        _ensure_key("huggingface")
 
     console.print("\n[bold]System check[/]")
     _check_ffmpeg()

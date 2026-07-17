@@ -25,10 +25,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27"]
-# Local speaker diarization/enrollment (heavy: pulls in torch). Install with:
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "numpy>=1.24"]
+# Speaker identification: torch-free ONNX (VAD + speaker embeddings via sherpa-onnx).
+# Models auto-download from public (non-gated) URLs on first use.
 #   pip install "wcfi-tools[speaker]"
-speaker = ["pyannote.audio>=3.1", "torch>=2.2", "torchaudio>=2.2"]
+speaker = ["sherpa-onnx>=1.10", "numpy>=1.24"]
 
 [project.scripts]
 wcfi = "wcfi_tools.cli:app"

@@ -6,12 +6,8 @@ from typing import Any
 
 from .. import config as cfg
 from .base import Summarizer, Transcriber
-from .diarize import Diarizer
 
-__all__ = [
-    "Summarizer", "Transcriber", "Diarizer",
-    "build_summarizer", "build_transcriber", "build_diarizer", "ProviderError",
-]
+__all__ = ["Summarizer", "Transcriber", "build_summarizer", "build_transcriber", "ProviderError"]
 
 
 class ProviderError(RuntimeError):
@@ -51,22 +47,3 @@ def build_transcriber(config: dict[str, Any], *, model: str | None = None) -> Tr
         f"Unknown/unsupported transcriber provider: {provider!r}. "
         f"Audio transcription currently requires OpenAI (local Whisper is on the roadmap)."
     )
-
-
-def build_diarizer(config: dict[str, Any], *, backend: str | None = None, model: str | None = None) -> Diarizer:
-    backend = backend or config["providers"].get("diarizer", "pyannote")
-    if backend == "window":
-        from .diarize import WindowDiarizer
-
-        return WindowDiarizer()
-    if backend == "pyannote":
-        from .diarize import PyannoteDiarizer
-
-        token = cfg.get_secret("huggingface")
-        if not token:
-            raise ProviderError(
-                "Speaker diarization needs a HuggingFace token. Run `wcfi setup`, or set HF_TOKEN. "
-                "You must also accept the conditions for pyannote/speaker-diarization-3.1 on HuggingFace."
-            )
-        return PyannoteDiarizer(token, model or config["models"]["diarize"])
-    raise ProviderError(f"Unknown diarizer backend: {backend!r} (expected 'pyannote' or 'window').")

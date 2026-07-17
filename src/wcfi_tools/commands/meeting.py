@@ -18,10 +18,11 @@ from ..core.ffmpeg import ToolNotFound
 from ..guards import require_configured
 from ..meeting import summarize_meeting
 from ..meeting.pipeline import derive_meeting_date, discover_audio
-from ..providers import ProviderError, build_diarizer, build_summarizer, build_transcriber
-from ..web import run_annotator
+from ..providers import ProviderError, build_summarizer, build_transcriber
+from . import speakers
 
-app = typer.Typer(help="Summarize board meetings from audio.", no_args_is_help=True)
+app = typer.Typer(help="Summarize board meetings; manage speakers.", no_args_is_help=True)
+app.add_typer(speakers.app, name="speakers")
 console = Console()
 
 
@@ -61,14 +62,9 @@ def summarize(
     meeting_time: str = typer.Option("Not explicitly captured", "--meeting-time"),
     meeting_date: str | None = typer.Option(None, "--meeting-date"),
     reasoning_effort: str = typer.Option("low", "--reasoning-effort"),
-    identify_speakers: Optional[bool] = typer.Option(
-        None, "--identify-speakers/--no-identify-speakers",
-        help="Attribute speakers by name (prompts if unset).",
+    identify: Optional[bool] = typer.Option(
+        None, "--identify/--no-identify", help="Identify speakers by name (prompts if unset).",
     ),
-    diarizer_backend: Optional[str] = typer.Option(
-        None, "--diarizer", help="Diarization backend: pyannote|window (window = dev stub)."
-    ),
-    annotator_port: int = typer.Option(8765, "--annotator-port"),
 ) -> None:
     """Turn a folder of meeting audio into copy-able minutes artifacts."""
     require_configured()  # `wcfi setup` must be run first
@@ -89,7 +85,14 @@ def summarize(
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(1)
 
-    diarizer_obj, identify_cb = _maybe_attribution(config, identify_speakers, diarizer_backend, annotator_port)
+    roster: dict[str, str] = {}
+    roster_note = ""
+    if _want_identify(identify):
+        audio_files = discover_audio(folder)
+        if audio_files:
+            roster, roster_note = speakers.identify_present(audio_files, folder / "_work")
+        else:
+            console.print("[yellow]No audio found to identify speakers from.[/]")
 
     emit_tuple = tuple(e.strip() for e in emit.split(",") if e.strip())
     bars = _ProgressBars()
@@ -99,7 +102,7 @@ def summarize(
             prepared_by=prepared_by, location=location, meeting_date=meeting_date,
             meeting_time=meeting_time, chunk_minutes=chunk_minutes,
             reasoning_effort=reasoning_effort, emit=emit_tuple, force=force,
-            diarizer=diarizer_obj, identify=identify_cb,
+            roster=roster, roster_note=roster_note,
             on_progress=bars,
         )
     except (ToolNotFound, FileNotFoundError, NotADirectoryError) as exc:
@@ -118,31 +121,17 @@ def summarize(
     console.print(f"  [dim]cache: {result.work_dir}[/]")
 
 
-def _maybe_attribution(config, identify_speakers, backend, port):
-    """Decide whether to attribute speakers; return (diarizer, identify_callback) or (None, None)."""
-    do_it = identify_speakers
-    if do_it is None:
-        if sys.stdin.isatty():
-            console.print(
-                "\n[bold]Speaker attribution[/] (optional): I detect distinct voices, then open a local\n"
-                "web page where you play short clips and say who's speaking (or mark 'Unsure').\n"
-                "It makes attendance and motion attributions accurate."
-            )
-            do_it = Confirm.ask("Set it up for this meeting?", default=False)
-        else:
-            do_it = False
-    if not do_it:
-        return None, None
-    try:
-        diarizer = build_diarizer(config, backend=backend)
-    except ProviderError as exc:
-        console.print(f"[yellow]Skipping speaker attribution:[/] {exc}")
-        return None, None
-
-    def identify(snippets, durations):
-        return run_annotator(snippets, durations, port=port)
-
-    return diarizer, identify
+def _want_identify(flag: Optional[bool]) -> bool:
+    """Resolve whether to identify speakers: explicit flag, else an interactive prompt."""
+    if flag is not None:
+        return flag
+    if not sys.stdin.isatty():
+        return False
+    console.print(
+        "\n[bold]Speaker identification[/] (optional): I find the distinct voices, match them to\n"
+        "anyone you've registered, and open a page to name any new voices. Names go into the minutes."
+    )
+    return Confirm.ask("Do it for this meeting?", default=False)
 
 
 def _dry_run(folder: Path, chunk_minutes: float) -> None:

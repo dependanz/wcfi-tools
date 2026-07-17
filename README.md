@@ -23,11 +23,11 @@ You also need **ffmpeg** and **ffprobe** on your `PATH` (used to chunk audio):
 - macOS: `brew install ffmpeg`
 - Debian/Ubuntu: `sudo apt install ffmpeg`
 
-For **speaker attribution**, install the (heavy, torch-based) extra and get a free HuggingFace
-token, then accept the terms for [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1):
+For **speaker identification** (optional), install the extra. It's **torch-free** (ONNX via
+`sherpa-onnx`); the models auto-download from public URLs — **no account, token, or gated model**:
 
 ```bash
-pip install "wcfi-tools[speaker]"
+pip install ".[speaker]"
 ```
 
 ## Setup
@@ -57,8 +57,7 @@ Options:
 --emit {md,paste,all}           Which artifacts to write (default all)
 --force                         Rebuild cached chunks/transcripts/summaries
 --dry-run                       Discover inputs & estimate chunks; no API calls
---identify-speakers             Attribute speakers by name (prompts if unset)
---diarizer {pyannote|window}    Diarization backend (window = dev stub, no token)
+--identify / --no-identify      Identify speakers by name (prompts if unset)
 ```
 
 Outputs (written into the meeting folder):
@@ -67,19 +66,25 @@ Outputs (written into the meeting folder):
 - `paste-block.txt` — plain, section-by-section text for pasting into a styled template
 - `_work/` — cached transcripts and intermediate facts (resumable; re-runs don't re-bill)
 
-### Speaker attribution (prototype)
+### Speaker identification (optional)
 
-`summarize` can put **names** on the people in the meeting. If you opt in (it prompts, or pass
-`--identify-speakers`), it:
+Put **names** on the voices. It's **enrollment-based**, so it stays accurate on long meetings and
+needs no accounts, tokens, or gated models — just `pip install ".[speaker]"`.
 
-1. **diarizes** the audio into distinct voices (via `pyannote.audio`),
-2. cuts a few clips per voice and opens a **local web page** in your browser,
-3. lets you play each clip and say **who is speaking** (or mark **Unsure**),
-4. feeds the resulting roster into the minutes — so **Attendance** and motion movers/seconders
-   are accurate instead of guessed.
+Register your board's voices once (opens a local web page — play a clip, type who it is, or mark
+**Unsure**); the named voiceprints are saved on your machine:
 
-Needs the speaker extra and a (free) HuggingFace token — see Install and `wcfi setup`. For a quick
-UI test without either, use the dev stub: `--identify-speakers --diarizer window`.
+```bash
+wcfi meeting speakers register <meeting-folder>   # find + name the distinct voices
+wcfi meeting speakers list                        # who's on file
+wcfi meeting speakers remove "<name>"             # forget someone
+```
+
+Then `summarize --identify` (or answer its prompt) finds each meeting's voices, matches them to
+your registered speakers, and asks you to name only the **new** ones — names flow into
+**Attendance** and motion movers/seconders. Under the hood: silero VAD → ONNX speaker embeddings
+(sherpa-onnx) → nearest registered voiceprint (low-confidence → *Unsure*). Voiceprints never leave
+your machine.
 
 ## Configuration & secrets
 
@@ -101,10 +106,10 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- **Speaker identification** — ✅ prototype landed (diarize → local web annotator → named minutes).
-  Next: robustness on real multi-speaker room audio, and word-level "who said what".
-- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from the labeled snippets so
-  future meetings auto-match known voices and only ask about new/unsure ones.
+- **Speaker identification** — ✅ enrollment-based & torch-free (sherpa-onnx VAD + ONNX embeddings).
+  Next: tune clustering on real multi-speaker room audio, and word-level "who said what" in the
+  transcript (not just the attendee list).
+- **`--transcript`** — bring your own transcript (Otter / `.vtt` / `.srt`) and skip transcription.
 - Longer term, the same UI-agnostic core (incl. the annotator) can back a hosted web/desktop app.
 
 ## License
