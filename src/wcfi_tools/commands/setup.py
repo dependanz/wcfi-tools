@@ -40,13 +40,14 @@ _VALIDATORS = {"openai": _validate_openai, "anthropic": _validate_anthropic}
 
 def _ensure_key(provider: str) -> bool:
     """Ensure a valid key exists for ``provider``; prompt + validate + store if needed."""
+    noun = "token" if provider == "huggingface" else "API key"
     source = cfg.secret_source(provider)
     if source:
-        console.print(f"  [green]OK[/] {provider} key found (via {source})")
+        console.print(f"  [green]OK[/] {provider} {noun} found (via {source})")
         return True
     env = cfg.SECRET_ENV_VARS.get(provider, provider.upper())
-    console.print(f"  {provider} key not found.")
-    key = Prompt.ask(f"  Paste your {provider} key", password=True).strip()
+    console.print(f"  {provider} {noun} not found.")
+    key = Prompt.ask(f"  Paste your {provider} {noun}", password=True).strip()
     if not key:
         console.print(f"  [yellow]Skipped[/] - set {env} later or re-run `wcfi setup`.")
         return False
@@ -54,13 +55,14 @@ def _ensure_key(provider: str) -> bool:
     if validator:
         ok, msg = validator(key)
         if not ok:
-            console.print(f"  [red]Key failed validation:[/] {msg}")
+            console.print(f"  [red]{noun.capitalize()} failed validation:[/] {msg}")
             return False
     if cfg.set_secret(provider, key):
-        console.print(f"  [green]OK[/] {provider} key validated and stored in the OS keyring.")
+        verb = "validated and stored" if validator else "stored"
+        console.print(f"  [green]OK[/] {provider} {noun} {verb} in the OS keyring.")
     else:
         console.print(
-            f"  [yellow]No keyring backend available.[/] Key validated but not stored — "
+            f"  [yellow]No keyring backend available.[/] {noun.capitalize()} not stored - "
             f"set {env} in your environment or a .env file."
         )
     return True
@@ -110,10 +112,23 @@ def setup(
         _ensure_key("anthropic")
 
     console.print("\n[bold]Speaker identification[/] (optional)")
-    if Confirm.ask("Set up local speaker diarization (pyannote)?", default=False):
+    console.print(
+        "  Puts names on speakers in the minutes (accurate Attendance + movers/seconders).\n"
+        "  It runs the local pyannote model, which needs a [bold]free HuggingFace token[/] and a\n"
+        "  one-time acceptance of the model's terms."
+    )
+    if Confirm.ask("Set it up now?", default=False):
+        console.print(
+            "\n  [bold]How to get the token (takes ~2 min):[/]\n"
+            "   1. Sign in or create a free account:  https://huggingface.co/join\n"
+            "   2. Open each model page below and click [bold]'Agree and access repository'[/]:\n"
+            "        https://huggingface.co/pyannote/speaker-diarization-3.1\n"
+            "        https://huggingface.co/pyannote/segmentation-3.0\n"
+            "   3. Create an access token (Role: [bold]Read[/]):  https://huggingface.co/settings/tokens\n"
+            "   4. Install the model runtime:  pip install \"wcfi-tools[speaker]\"\n"
+            "  Then paste the token below (it's stored in your OS keyring, never shown again).\n"
+        )
         _ensure_key("huggingface")
-        console.print('  [dim]Also: pip install "wcfi-tools[speaker]" and accept the model terms at[/]')
-        console.print("  [dim]https://huggingface.co/pyannote/speaker-diarization-3.1[/]")
 
     console.print("\n[bold]System check[/]")
     _check_ffmpeg()
