@@ -35,7 +35,7 @@ wcfi setup --check    # verify configuration without changing anything (doctor m
 Point it at a folder containing the meeting audio (`.m4a`, `.mp3`, `.wav`, …):
 
 ```bash
-wcfi meeting summarize ./MeetingRecordings/071226
+wcfi meeting summarize <meeting-folder>
 ```
 
 Options:
@@ -76,10 +76,12 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- `wcfi meeting publish` — push minutes to Google Docs (own OAuth)
-- `wcfi enroll` / `--identify-speakers` — name speakers via voice enrollment
-- Local (offline) transcription via faster-whisper
-- Web + desktop front-ends over the same core
+- **Speaker identification** — `wcfi meeting summarize` will ask whether you want speakers
+  named. If yes, it plays short snippets and you annotate who is speaking; the transcript is
+  then attributed by name (making attendance, movers, and seconders far more reliable).
+- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from labeled samples so
+  identification can carry across meetings.
+- Longer term, the same UI-agnostic core can back a web or desktop front-end.
 
 ## License
 
