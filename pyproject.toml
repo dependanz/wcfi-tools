@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wcfi-tools"
+version = "0.1.0"
+description = "Tools for Word Christian Fellowship International — starting with meeting-minutes summarization."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Danzel Serrano", email = "danzel.serrano@gmail.com" }]
+keywords = ["wcfi", "meeting", "minutes", "transcription", "summarization", "cli"]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "openai>=2.0",
+    "anthropic>=0.40",
+    "keyring>=25.0",
+    "python-dotenv>=1.0",
+    "platformdirs>=4.2",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+wcfi = "wcfi_tools.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/dependanz/wcfi-tools"
+Repository = "https://github.com/dependanz/wcfi-tools"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wcfi_tools"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
