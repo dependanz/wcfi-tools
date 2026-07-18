@@ -19,6 +19,20 @@ def require_tool(name: str) -> None:
         )
 
 
+def has_tool(name: str) -> bool:
+    return shutil.which(name) is not None
+
+
+def play(path: Path) -> bool:
+    """Play an audio file with ffplay if available. Returns True if playback ran, else False."""
+    if shutil.which("ffplay") is None:
+        return False
+    result = subprocess.run(
+        ["ffplay", "-nodisp", "-autoexit", "-hide_banner", "-loglevel", "error", str(path)],
+    )
+    return result.returncode == 0
+
+
 def ffprobe_duration(path: Path) -> float:
     result = subprocess.run(
         [

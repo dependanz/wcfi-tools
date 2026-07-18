@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -15,7 +16,16 @@ from ..core.ffmpeg import ToolNotFound
 from ..guards import require_configured
 from ..meeting import summarize_meeting
 from ..meeting.pipeline import derive_meeting_date, discover_audio
-from ..providers import ProviderError, build_summarizer, build_transcriber
+from ..providers import ProviderError, build_diarizer, build_summarizer, build_transcriber
+from ..providers.base import DiarizationResult
+from ..providers.pyannote_provider import DiarizerUnavailable
+from ..speakers import (
+    attribute_turns,
+    enroll_confirmed,
+    propose_from_voiceprints,
+    select_representative_turns,
+)
+from ..speakers.voiceprints import VoiceprintDB
 
 app = typer.Typer(help="Summarize board meetings from audio.", no_args_is_help=True)
 console = Console()
@@ -98,6 +108,151 @@ def summarize(
     for name, path in result.artifacts.items():
         console.print(f"  [cyan]{name}[/]  {path}")
     console.print(f"  [dim]cache: {result.work_dir}[/]")
+
+
+@app.command("identify")
+def identify(
+    folder: Path = typer.Argument(..., help="Folder containing the meeting audio."),
+    per_speaker: int = typer.Option(3, "--per-speaker", help="Snippets to preview per speaker."),
+    play: bool = typer.Option(True, "--play/--no-play", help="Play snippets with ffplay if available."),
+    threshold: float | None = typer.Option(None, "--threshold", help="Cosine auto-match threshold."),
+) -> None:
+    """Diarize a meeting and walk you through naming each speaker (local, pyannote).
+
+    Returning speakers are matched automatically from your enrolled voiceprints; you only label the
+    ones that are new or uncertain. Confirmed voices are saved for next time. Writes
+    ``speakers.json`` plus per-file diarization into ``_work/diarization/``.
+    """
+    require_configured()
+    folder = folder.resolve()
+    if not folder.is_dir():
+        console.print(f"[red]Folder does not exist:[/] {folder}")
+        raise typer.Exit(1)
+
+    config = cfg.load_config()
+    match_threshold = threshold if threshold is not None else float(
+        config.get("speakers", {}).get("match_threshold", 0.65)
+    )
+    max_samples = int(config.get("speakers", {}).get("max_samples_per_speaker", 8))
+
+    try:
+        ffmpeg.require_tool("ffmpeg")
+        ffmpeg.require_tool("ffprobe")
+    except ToolNotFound as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+
+    try:
+        diarizer = build_diarizer(config)
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+
+    audio_files = discover_audio(folder)
+    if not audio_files:
+        console.print("[yellow]No audio files found.[/]")
+        raise typer.Exit(1)
+
+    work_dir = folder / "_work"
+    snippet_dir = work_dir / "speaker_snippets"
+    diar_dir = work_dir / "diarization"
+    diar_dir.mkdir(parents=True, exist_ok=True)
+
+    db = VoiceprintDB.load()
+    summary: dict[str, dict[str, str]] = {}
+
+    for audio in audio_files:
+        console.print(f"\n[bold]Diarizing[/] {audio.name} …")
+        try:
+            diar = diarizer.diarize(audio)
+        except DiarizerUnavailable as exc:
+            console.print(f"[red]{exc}[/]")
+            raise typer.Exit(1)
+        if not diar.turns:
+            console.print("  [yellow]No speech detected; skipping.[/]")
+            continue
+
+        proposals = propose_from_voiceprints(diar, db, match_threshold)
+        snippets = select_representative_turns(diar.turns, per_speaker=per_speaker)
+        mapping = _walk_through(audio, diar, proposals, snippets, snippet_dir, play)
+
+        enrolled = enroll_confirmed(db, diar, mapping, max_samples=max_samples)
+        db.save()
+
+        attributed = attribute_turns(diar.turns, mapping)
+        _write_json(
+            diar_dir / f"{audio.stem}.json",
+            {
+                "source": audio.name,
+                "clusters": mapping,
+                "turns": [{"start": s, "end": e, "speaker": name} for s, e, name in attributed],
+            },
+        )
+        summary[audio.name] = mapping
+        console.print(f"  [green]Saved[/] {enrolled} voiceprint(s); {len(mapping)} cluster(s) named.")
+
+    _write_json(folder / "speakers.json", {"files": summary})
+    console.print(f"\n[green]Done[/] — wrote {folder / 'speakers.json'}")
+    console.print("[dim]Next: wcfi meeting summarize <folder> (speaker-attributed minutes are on the roadmap).[/]")
+
+
+def _walk_through(
+    audio: Path,
+    diar: DiarizationResult,
+    proposals: dict,
+    snippets: dict,
+    snippet_dir: Path,
+    play: bool,
+) -> dict[str, str]:
+    """Ask the human to confirm/label each cluster. Returns cluster-label -> confirmed name."""
+    mapping: dict[str, str] = {}
+    for cluster in diar.labels():
+        proposal = proposals.get(cluster)
+        console.print(f"\n[bold cyan]{cluster}[/] in {audio.name}")
+        if proposal and proposal.name and proposal.confident:
+            if typer.confirm(f"  Auto-matched [green]{proposal.name}[/] "
+                             f"(similarity {proposal.score:.2f}). Correct?", default=True):
+                mapping[cluster] = proposal.name
+                continue
+
+        _preview(cluster, snippets.get(cluster, []), audio, snippet_dir, play)
+        hint = ""
+        if proposal and proposal.name:
+            hint = f" [dim](best guess: {proposal.name}, {proposal.score:.2f})[/]"
+        console.print(f"  Who is speaking?{hint}  (Enter a name, or leave blank to skip)")
+        answer = typer.prompt("  Name", default="", show_default=False).strip()
+        if answer:
+            mapping[cluster] = answer
+    return mapping
+
+
+def _preview(cluster: str, turns: list, audio: Path, snippet_dir: Path, play: bool) -> None:
+    if not turns:
+        console.print("  [yellow](no representative snippet available)[/]")
+        return
+    snippet_dir.mkdir(parents=True, exist_ok=True)
+    for idx, turn in enumerate(turns, 1):
+        dest = snippet_dir / f"{audio.stem}_{cluster}_{idx}.wav"
+        try:
+            ffmpeg.extract_chunk(audio, dest, turn.start, turn.duration)
+        except Exception as exc:  # noqa: BLE001 - snippet is a convenience, never fatal
+            console.print(f"  [yellow]Could not cut snippet:[/] {exc}")
+            continue
+        stamp = f"{_clock(turn.start)}–{_clock(turn.end)}"
+        console.print(f"  snippet {idx}: {stamp}  {dest}")
+        if play and ffmpeg.has_tool("ffplay"):
+            ffmpeg.play(dest)
+
+
+def _clock(seconds: float) -> str:
+    total = int(round(seconds))
+    h, m, s = total // 3600, (total % 3600) // 60, total % 60
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _dry_run(folder: Path, chunk_minutes: float) -> None:

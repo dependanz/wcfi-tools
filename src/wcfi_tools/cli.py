@@ -6,6 +6,7 @@ import typer
 
 from . import __version__
 from .commands import meeting as meeting_cmd
+from .commands import speakers as speakers_cmd
 from .commands.setup import setup as setup_command
 
 app = typer.Typer(
@@ -16,6 +17,7 @@ app = typer.Typer(
 
 app.command("setup")(setup_command)
 app.add_typer(meeting_cmd.app, name="meeting")
+app.add_typer(speakers_cmd.app, name="speakers")
 
 
 def _version_callback(value: bool) -> None:

@@ -5,9 +5,19 @@ from __future__ import annotations
 from typing import Any
 
 from .. import config as cfg
-from .base import Summarizer, Transcriber
+from .base import DiarizationResult, Diarizer, SpeakerTurn, Summarizer, Transcriber
 
-__all__ = ["Summarizer", "Transcriber", "build_summarizer", "build_transcriber", "ProviderError"]
+__all__ = [
+    "Summarizer",
+    "Transcriber",
+    "Diarizer",
+    "DiarizationResult",
+    "SpeakerTurn",
+    "build_summarizer",
+    "build_transcriber",
+    "build_diarizer",
+    "ProviderError",
+]
 
 
 class ProviderError(RuntimeError):
@@ -46,4 +56,18 @@ def build_transcriber(config: dict[str, Any], *, model: str | None = None) -> Tr
     raise ProviderError(
         f"Unknown/unsupported transcriber provider: {provider!r}. "
         f"Audio transcription currently requires OpenAI (local Whisper is on the roadmap)."
+    )
+
+
+def build_diarizer(
+    config: dict[str, Any], *, provider: str | None = None, model: str | None = None
+) -> Diarizer:
+    provider = provider or config["providers"].get("diarizer", "pyannote")
+    if provider == "pyannote":
+        from .pyannote_provider import PyannoteDiarizer
+
+        return PyannoteDiarizer(_require_key("hf"), model or config["models"]["diarization"])
+    raise ProviderError(
+        f"Unknown diarizer provider: {provider!r} (expected 'pyannote'). "
+        f"Local speaker identification currently uses pyannote.audio."
     )

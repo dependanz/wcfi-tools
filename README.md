@@ -58,6 +58,46 @@ Outputs (written into the meeting folder):
 - `paste-block.txt` — plain, section-by-section text for pasting into a styled template
 - `_work/` — cached transcripts and intermediate facts (resumable; re-runs don't re-bill)
 
+## Speaker identification (local, optional)
+
+Runs entirely on your machine with [pyannote.audio](https://github.com/pyannote/pyannote-audio) —
+no meeting audio leaves the device. It diarizes ("who spoke when"), then matches each anonymous
+voice against voiceprints you've enrolled before, so **returning speakers are named automatically
+and you only label the new or uncertain ones**. Confirmed voices are remembered for next time.
+
+Install the extra and enable it in setup:
+
+```bash
+pip install 'wcfi-tools[speakers]'
+wcfi setup            # answer "yes" to speaker identification, paste a Hugging Face token
+```
+
+pyannote's models are **gated** on Hugging Face. A token alone isn't enough — a human has to accept
+each model's license once (this can't be automated; it's Hugging Face's terms). `wcfi setup` prints
+the exact links to click; after that the models cache locally and you're done.
+
+Walk through a meeting's speakers:
+
+```bash
+wcfi meeting identify <meeting-folder>
+```
+
+It plays a few snippets per voice (via `ffplay` if present) and asks "who is speaking?" — accepting
+any auto-matches from your voiceprint database. Results are written to `speakers.json` and
+`_work/diarization/`.
+
+Manage the voiceprint database:
+
+```bash
+wcfi speakers list                 # who's enrolled, and how many samples each
+wcfi speakers rename "Old" "New"
+wcfi speakers forget "Name"
+wcfi speakers clear
+```
+
+> Voiceprints are biometric data. They stay on your machine, `wcfi speakers forget` removes them,
+> and you should disclose their use to the people being recorded.
+
 ## Configuration & secrets
 
 Precedence at runtime: **CLI flag → environment variable → `.env` → OS keyring → interactive prompt.**
@@ -78,12 +118,14 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- **Speaker identification** — `wcfi meeting summarize` will ask whether you want speakers
-  named. If yes, it plays short snippets and you annotate who is speaking; the transcript is
-  then attributed by name (making attendance, movers, and seconders far more reliable).
-- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from labeled samples so
-  identification can carry across meetings.
-- Longer term, the same UI-agnostic core can back a web or desktop front-end.
+- **Speaker-attributed minutes** — feed the `wcfi meeting identify` results into
+  `wcfi meeting summarize` so the transcript (and therefore attendance, movers, and seconders) is
+  labeled by name automatically.
+- **Browser walk-through** — a local web app front-end over the same speaker-ID core (the CLI
+  walk-through in `wcfi meeting identify` is the first front-end).
+- **LLM name proposals** — use conversational cues in the transcript ("Thank you, Pastor Jun") to
+  pre-fill guesses for unmatched voices, on top of the acoustic voiceprint match.
+- Longer term, the same UI-agnostic core can back a web or desktop front-end for the whole tool.
 
 ## License
 

@@ -22,14 +22,27 @@ KEYRING_SERVICE = "wcfi"
 SECRET_ENV_VARS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "hf": "HF_TOKEN",  # Hugging Face token for gated pyannote models (local diarization)
 }
 
-DEFAULT_CONFIG: dict[str, dict[str, str]] = {
-    "providers": {"summarizer": "openai", "transcriber": "openai"},
+# Extra environment variable names honored (in order) as fallbacks for a provider's secret.
+_SECRET_ENV_FALLBACKS = {
+    "hf": ("HUGGINGFACE_TOKEN", "HUGGING_FACE_HUB_TOKEN"),
+}
+
+DEFAULT_CONFIG: dict[str, dict[str, Any]] = {
+    "providers": {"summarizer": "openai", "transcriber": "openai", "diarizer": "pyannote"},
     "models": {
         "openai_summary": "gpt-5.5",
         "anthropic_summary": "claude-sonnet-5",
         "transcribe": "gpt-4o-transcribe",
+        "diarization": "pyannote/speaker-diarization-3.1",
+    },
+    # Local speaker identification (pyannote). Off until `wcfi setup` enables it.
+    "speakers": {
+        "enabled": False,
+        "match_threshold": 0.65,  # cosine similarity above which a voiceprint auto-matches
+        "max_samples_per_speaker": 8,
     },
 }
 
@@ -106,15 +119,25 @@ def _keyring():
         return None
 
 
+def _env_names(provider: str) -> list[str]:
+    """Environment variable names to consult for a provider's secret, primary first."""
+    names: list[str] = []
+    primary = SECRET_ENV_VARS.get(provider)
+    if primary:
+        names.append(primary)
+    names.extend(_SECRET_ENV_FALLBACKS.get(provider, ()))
+    return names
+
+
 def get_secret(provider: str) -> str | None:
     """Return the API key for a provider: env/.env first, then the OS keyring."""
-    env_var = SECRET_ENV_VARS.get(provider)
-    if env_var and os.environ.get(env_var):
-        return os.environ[env_var]
+    for name in _env_names(provider):
+        if os.environ.get(name):
+            return os.environ[name]
     keyring = _keyring()
     if keyring is not None:
         try:
-            return keyring.get_password(KEYRING_SERVICE, env_var or provider)
+            return keyring.get_password(KEYRING_SERVICE, SECRET_ENV_VARS.get(provider, provider))
         except Exception:  # pragma: no cover
             return None
     return None
@@ -135,13 +158,13 @@ def set_secret(provider: str, value: str) -> bool:
 
 def secret_source(provider: str) -> str | None:
     """Where a secret is coming from ('env', 'keyring'), or None if unset. For doctor output."""
-    env_var = SECRET_ENV_VARS.get(provider)
-    if env_var and os.environ.get(env_var):
-        return "env"
+    for name in _env_names(provider):
+        if os.environ.get(name):
+            return "env"
     keyring = _keyring()
     if keyring is not None:
         try:
-            if keyring.get_password(KEYRING_SERVICE, env_var or provider):
+            if keyring.get_password(KEYRING_SERVICE, SECRET_ENV_VARS.get(provider, provider)):
                 return "keyring"
         except Exception:  # pragma: no cover
             return None
