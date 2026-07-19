@@ -15,14 +15,18 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..core import ffmpeg
-from ..providers.base import Summarizer, Transcriber
+from ..providers.base import DiarizationResult, Diarizer, SpeakerTurn, Summarizer, Transcriber
+from ..speakers.voiceprints import VoiceprintDB
 from . import artifacts, schemas
+from .speaker_id import ClusterResolver, resolve_meeting_speakers
 
 AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".mp4", ".mpeg", ".mpga", ".webm"}
 WORK_DIR_NAME = "_work"
 # Directories whose contents are pipeline artifacts, never source audio. Includes the legacy
 # "_minutes_work" name used by the original script so old caches aren't picked up as inputs.
 WORK_DIR_NAMES = {"_work", "_minutes_work"}
+# Consecutive turns by the same speaker up to this gap (seconds) merge into one transcription unit.
+SPEAKER_MERGE_GAP_SECONDS = 2.0
 Progress = Callable[[str, int, int], None]
 
 
@@ -36,6 +40,14 @@ class ChunkRecord:
     start_seconds: float
     end_seconds: float
     duration_seconds: float
+    speaker: str | None = None  # resolved speaker name (or anonymous label) when identified
+
+
+@dataclass(frozen=True)
+class _Segment:
+    start: float
+    end: float
+    name: str
 
 
 @dataclass
@@ -63,6 +75,12 @@ def summarize_meeting(
     emit: tuple[str, ...] = ("md", "paste"),
     force: bool = False,
     on_progress: Progress | None = None,
+    identify_speakers: bool = False,
+    diarizer: Diarizer | None = None,
+    speaker_resolver: ClusterResolver | None = None,
+    speaker_threshold: float = 0.65,
+    speaker_max_samples: int = 8,
+    voiceprint_db: VoiceprintDB | None = None,
 ) -> PipelineResult:
     meeting_dir = meeting_dir.resolve()
     if not meeting_dir.is_dir():
@@ -79,7 +97,18 @@ def summarize_meeting(
     if not audio_files:
         raise FileNotFoundError("No audio files were found in the meeting folder.")
 
-    chunks = build_chunk_records(meeting_dir, audio_files, work_dir, chunk_minutes, on_progress)
+    if identify_speakers and diarizer is not None and speaker_resolver is not None:
+        db = voiceprint_db or VoiceprintDB.load()
+        diar_by_file, names_by_file = resolve_meeting_speakers(
+            audio_files, diarizer=diarizer, db=db, work_dir=work_dir,
+            resolver=speaker_resolver, threshold=speaker_threshold,
+            max_samples=speaker_max_samples, force=force,
+        )
+        chunks = build_speaker_chunk_records(
+            meeting_dir, audio_files, diar_by_file, names_by_file, work_dir, chunk_minutes
+        )
+    else:
+        chunks = build_chunk_records(meeting_dir, audio_files, work_dir, chunk_minutes, on_progress)
     _write_json(work_dir / "chunks_manifest.json", [asdict(c) for c in chunks])
     ensure_audio_chunks(chunks, force, on_progress)
 
@@ -158,6 +187,87 @@ def build_chunk_records(
     return records
 
 
+def build_speaker_chunk_records(
+    meeting_dir: Path,
+    audio_files: list[Path],
+    diar_by_file: dict[str, DiarizationResult],
+    names_by_file: dict[str, dict[str, str]],
+    work_dir: Path,
+    chunk_minutes: float,
+) -> list[ChunkRecord]:
+    """Chunk each file by speaker turn (merged + capped) so every chunk is one named speaker.
+
+    Files with no diarization fall back to fixed-time chunks (speaker unknown), so no audio is lost.
+    """
+    chunk_seconds = chunk_minutes * 60.0
+    chunk_dir = work_dir / "chunks"
+    records: list[ChunkRecord] = []
+    sequence = 1
+    for audio in audio_files:
+        rel = _relposix(audio, meeting_dir)
+        slug = _slugify(Path(rel).with_suffix("").as_posix())
+        diar = diar_by_file.get(str(audio))
+        names = names_by_file.get(str(audio), {})
+        segments = _merge_turns_to_segments(diar.turns if diar else [], names, chunk_seconds)
+
+        if not segments:  # no diarization for this file — keep it, just unattributed
+            duration = ffmpeg.ffprobe_duration(audio)
+            for c in range(math.ceil(duration / chunk_seconds)):
+                start = c * chunk_seconds
+                end = min(start + chunk_seconds, duration)
+                segments.append(_Segment(round(start, 3), round(end, 3), ""))
+
+        for seg in segments:
+            chunk_id = f"{sequence:04d}_{slug}"
+            records.append(ChunkRecord(
+                chunk_id=chunk_id, sequence=sequence, source_audio=str(audio),
+                source_audio_rel=rel, chunk_path=str(chunk_dir / f"{chunk_id}.wav"),
+                start_seconds=seg.start, end_seconds=seg.end,
+                duration_seconds=round(seg.end - seg.start, 3),
+                speaker=seg.name or None,
+            ))
+            sequence += 1
+    return records
+
+
+def _merge_turns_to_segments(
+    turns: list[SpeakerTurn], names: dict[str, str], chunk_seconds: float,
+    gap: float = SPEAKER_MERGE_GAP_SECONDS,
+) -> list[_Segment]:
+    """Merge consecutive same-speaker turns (within ``gap``) and split anything over the cap."""
+    merged: list[_Segment] = []
+    current: _Segment | None = None
+    for turn in sorted(turns, key=lambda t: t.start):
+        name = names.get(turn.speaker, turn.speaker)
+        if (
+            current is not None
+            and current.name == name
+            and turn.start - current.end <= gap
+            and turn.end - current.start <= chunk_seconds
+        ):
+            current = _Segment(current.start, max(current.end, turn.end), name)
+        else:
+            if current is not None:
+                merged.append(current)
+            current = _Segment(turn.start, turn.end, name)
+    if current is not None:
+        merged.append(current)
+
+    out: list[_Segment] = []
+    for seg in merged:
+        span = seg.end - seg.start
+        if span <= chunk_seconds:
+            out.append(_Segment(round(seg.start, 3), round(seg.end, 3), seg.name))
+            continue
+        pieces = math.ceil(span / chunk_seconds)
+        step = span / pieces
+        for i in range(pieces):
+            start = seg.start + i * step
+            end = min(seg.end, start + step)
+            out.append(_Segment(round(start, 3), round(end, 3), seg.name))
+    return out
+
+
 def ensure_audio_chunks(chunks: list[ChunkRecord], force: bool, on_progress: Progress | None) -> None:
     for idx, record in enumerate(chunks, 1):
         _emit(on_progress, "chunk", idx, len(chunks))
@@ -204,8 +314,10 @@ def extract_chunk_atomics(
             data = _read_json(out)
         else:
             text = by_id[record.chunk_id]["text"]
+            speaker_line = f"Speaker: {record.speaker}\n" if record.speaker else ""
             user = (
                 f"Source chunk: {record.chunk_id}\nSource audio: {record.source_audio_rel}\n"
+                f"{speaker_line}"
                 f"Time range: {_fmt(record.start_seconds)} - {_fmt(record.end_seconds)}\n\n"
                 f"Transcript:\n{text or '[empty transcript]'}"
             )
@@ -289,12 +401,13 @@ def _render_transcript_md(items: list[dict[str, Any]]) -> str:
     lines = ["# WCFI Meeting Transcript", ""]
     for item in items:
         chunk = item["chunk"]
-        lines += [
-            f"### {chunk['chunk_id']}", "",
-            f"- Source: {chunk['source_audio_rel']}",
-            f"- Time: {_fmt(chunk['start_seconds'])} - {_fmt(chunk['end_seconds'])}", "",
-            item["text"] or "[empty transcript]", "",
-        ]
+        speaker = chunk.get("speaker")
+        heading = f"### {chunk['chunk_id']}" + (f" — {speaker}" if speaker else "")
+        meta = [f"- Source: {chunk['source_audio_rel']}"]
+        if speaker:
+            meta.append(f"- Speaker: {speaker}")
+        meta.append(f"- Time: {_fmt(chunk['start_seconds'])} - {_fmt(chunk['end_seconds'])}")
+        lines += [heading, "", *meta, "", item["text"] or "[empty transcript]", ""]
     return "\n".join(lines).rstrip() + "\n"
 
 

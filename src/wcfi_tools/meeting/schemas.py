@@ -33,7 +33,9 @@ def atomic_extraction_system_prompt() -> str:
         "You extract atomic factual meeting notes from WCFI church board meeting transcripts. "
         "The meeting may be in English, Filipino/Tagalog, and Taglish. Return only facts supported "
         "by the transcript chunk. Create small standalone facts suitable for board minutes. "
-        "Do not invent names, motions, votes, owners, due dates, or attendance. Use 'Person' or "
+        "Do not invent names, motions, votes, owners, due dates, or attendance. When a 'Speaker:' "
+        "is given for the chunk, that is the identified speaker — attribute the chunk's facts, "
+        "motions, and action-item owners to that person by name. Otherwise use 'Person' or "
         "'Not explicitly captured' when the transcript does not clearly identify a detail. "
         "Set uncertain=true when the transcript is garbled or attribution is weak."
     )

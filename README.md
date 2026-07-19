@@ -40,16 +40,24 @@ Point it at a folder containing the meeting audio (`.m4a`, `.mp3`, `.wav`, …):
 wcfi meeting summarize <meeting-folder>
 ```
 
+This is the one command you need — if speaker identification is enabled (see below), it diarizes and
+walks you through naming voices first, then produces minutes **attributed by name**. Otherwise it
+runs speaker-blind, exactly as before.
+
 Options:
 
 ```
---provider {openai|anthropic}   Summarization backend (default from `wcfi setup`)
---summary-model TEXT            Override the summarization model
---transcribe-model TEXT         Override the transcription model (OpenAI)
---chunk-minutes FLOAT           Audio chunk length (default 5)
---emit {md,paste,all}           Which artifacts to write (default all)
---force                         Rebuild cached chunks/transcripts/summaries
---dry-run                       Discover inputs & estimate chunks; no API calls
+--provider {openai|anthropic}       Summarization backend (default from `wcfi setup`)
+--summary-model TEXT                Override the summarization model
+--transcribe-model TEXT             Override the transcription model (OpenAI)
+--chunk-minutes FLOAT               Audio chunk length (default 5)
+--emit {md,paste,all}               Which artifacts to write (default all)
+--force                             Rebuild cached chunks/transcripts/summaries
+--dry-run                           Discover inputs & estimate chunks; no API calls
+--identify-speakers / --no-…        Force speaker id on/off (default: from `wcfi setup`)
+--device {auto|cpu|cuda}            Diarization device (default auto; CPU works fine)
+--no-prompt                         Don't ask; auto-match known voices only (for agents/CI)
+--play / --no-play                  Play snippets during the naming walk-through
 ```
 
 Outputs (written into the meeting folder):
@@ -60,10 +68,12 @@ Outputs (written into the meeting folder):
 
 ## Speaker identification (local, optional)
 
-Runs entirely on your machine with [pyannote.audio](https://github.com/pyannote/pyannote-audio) —
-no meeting audio leaves the device. It diarizes ("who spoke when"), then matches each anonymous
-voice against voiceprints you've enrolled before, so **returning speakers are named automatically
-and you only label the new or uncertain ones**. Confirmed voices are remembered for next time.
+Built into `wcfi meeting summarize` — no separate step required. It runs entirely on your machine
+with [pyannote.audio](https://github.com/pyannote/pyannote-audio), so no meeting audio leaves the
+device. It diarizes ("who spoke when"), matches each anonymous voice against voiceprints you've
+enrolled before — so **returning speakers are named automatically and you only label the new or
+uncertain ones** — then attributes the minutes by name. Confirmed voices are remembered for next
+time, making attendance, movers, and seconders far more reliable.
 
 Install the extra and enable it in setup:
 
@@ -76,20 +86,23 @@ pyannote's models are **gated** on Hugging Face. A token alone isn't enough — 
 each model's license once (this can't be automated; it's Hugging Face's terms). `wcfi setup` prints
 the exact links to click; after that the models cache locally and you're done.
 
-Walk through a meeting's speakers:
+Then just run the usual command; it handles the rest:
 
 ```bash
-wcfi meeting identify <meeting-folder>
+wcfi meeting summarize <meeting-folder>
 ```
 
-It plays a few snippets per voice (via `ffplay` if present) and asks "who is speaking?" — accepting
-any auto-matches from your voiceprint database. Results are written to `speakers.json` and
-`_work/diarization/`.
+For each new/uncertain voice it plays a few snippets (via `ffplay` if present) and asks "who is
+speaking?", accepting any auto-matches. Running non-interactively (an agent, CI, `--no-prompt`) it
+names only the voices it recognizes and leaves the rest anonymous.
+
+**Optional pre-step.** If you'd rather label voices ahead of time (or without summarizing), run
+`wcfi meeting identify <folder>` — `summarize` reuses whatever it resolved.
 
 **No GPU needed.** Diarization runs on CPU by default (it auto-uses CUDA only if available), so it
 works on any laptop — just slower: budget roughly 1–3× the recording length on CPU. It's a one-time
-cost per meeting: the raw diarization is cached in `_work/diarization/`, so re-running the
-walk-through is instant. Use `--force` to recompute, or `--device cpu|cuda` to pin the device.
+cost per meeting: the raw diarization is cached in `_work/diarization/`, so re-runs are instant. Use
+`--force` to recompute, or `--device cpu|cuda` to pin the device.
 
 Manage the voiceprint database:
 
@@ -123,11 +136,9 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- **Speaker-attributed minutes** — feed the `wcfi meeting identify` results into
-  `wcfi meeting summarize` so the transcript (and therefore attendance, movers, and seconders) is
-  labeled by name automatically.
 - **Browser walk-through** — a local web app front-end over the same speaker-ID core (the CLI
-  walk-through in `wcfi meeting identify` is the first front-end).
+  Q&A is the first front-end; the core takes the interaction as an injected callback, so a web UI
+  slots in without touching the pipeline).
 - **LLM name proposals** — use conversational cues in the transcript ("Thank you, Pastor Jun") to
   pre-fill guesses for unmatched voices, on top of the acoustic voiceprint match.
 - Longer term, the same UI-agnostic core can back a web or desktop front-end for the whole tool.

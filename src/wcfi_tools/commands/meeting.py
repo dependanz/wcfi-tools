@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 
 import typer
@@ -16,15 +17,9 @@ from ..core.ffmpeg import ToolNotFound
 from ..guards import require_configured
 from ..meeting import summarize_meeting
 from ..meeting.pipeline import derive_meeting_date, discover_audio
+from ..meeting.speaker_id import ClusterPrompt, ClusterResolver, auto_resolver, resolve_meeting_speakers
 from ..providers import ProviderError, build_diarizer, build_summarizer, build_transcriber
-from ..providers.base import DiarizationResult
 from ..providers.pyannote_provider import DiarizerUnavailable
-from ..speakers import (
-    attribute_turns,
-    enroll_confirmed,
-    propose_from_voiceprints,
-    select_representative_turns,
-)
 from ..speakers.voiceprints import VoiceprintDB
 
 app = typer.Typer(help="Summarize board meetings from audio.", no_args_is_help=True)
@@ -67,8 +62,19 @@ def summarize(
     meeting_time: str = typer.Option("Not explicitly captured", "--meeting-time"),
     meeting_date: str | None = typer.Option(None, "--meeting-date"),
     reasoning_effort: str = typer.Option("low", "--reasoning-effort"),
+    identify_speakers: bool | None = typer.Option(
+        None, "--identify-speakers/--no-identify-speakers",
+        help="Diarize and attribute the minutes by speaker name (default: from `wcfi setup`).",
+    ),
+    device: str = typer.Option("auto", "--device", help="Diarization device: auto|cpu|cuda."),
+    play: bool = typer.Option(True, "--play/--no-play", help="Play snippets during speaker naming."),
+    no_prompt: bool = typer.Option(False, "--no-prompt", help="Never ask; auto-match known voices only."),
 ) -> None:
-    """Turn a folder of meeting audio into copy-able minutes artifacts."""
+    """Turn a folder of meeting audio into copy-able minutes artifacts.
+
+    With speaker identification on (enabled in `wcfi setup`, or `--identify-speakers`), it first
+    diarizes and walks you through naming voices, then produces minutes attributed by name.
+    """
     require_configured()  # `wcfi setup` must be run first
     folder = folder.resolve()
     if not folder.is_dir():
@@ -87,6 +93,24 @@ def summarize(
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(1)
 
+    want_speakers = (
+        identify_speakers if identify_speakers is not None
+        else bool(config.get("speakers", {}).get("enabled", False))
+    )
+    diarizer = None
+    resolver: ClusterResolver | None = None
+    if want_speakers:
+        try:
+            diarizer = build_diarizer(config, device=None if device == "auto" else device)
+        except ProviderError as exc:
+            console.print(f"[red]{exc}[/] (or run with --no-identify-speakers)")
+            raise typer.Exit(1)
+        interactive = (not no_prompt) and sys.stdout.isatty()
+        if not interactive:
+            console.print("[dim]Speaker identification: non-interactive — auto-matching known voices only.[/]")
+        resolver = _make_resolver(interactive, folder / "_work" / "speaker_snippets", play)
+
+    speakers_cfg = config.get("speakers", {})
     emit_tuple = tuple(e.strip() for e in emit.split(",") if e.strip())
     bars = _ProgressBars()
     try:
@@ -96,7 +120,15 @@ def summarize(
             meeting_time=meeting_time, chunk_minutes=chunk_minutes,
             reasoning_effort=reasoning_effort, emit=emit_tuple, force=force,
             on_progress=bars,
+            identify_speakers=diarizer is not None,
+            diarizer=diarizer, speaker_resolver=resolver,
+            speaker_threshold=float(speakers_cfg.get("match_threshold", 0.65)),
+            speaker_max_samples=int(speakers_cfg.get("max_samples_per_speaker", 8)),
         )
+    except DiarizerUnavailable as exc:
+        bars.close()
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
     except (ToolNotFound, FileNotFoundError, NotADirectoryError) as exc:
         bars.close()
         console.print(f"[red]{exc}[/]")
@@ -119,11 +151,12 @@ def identify(
     device: str = typer.Option("auto", "--device", help="Inference device: auto|cpu|cuda."),
     force: bool = typer.Option(False, "--force", help="Re-run diarization even if a cache exists."),
 ) -> None:
-    """Diarize a meeting and walk you through naming each speaker (local, pyannote).
+    """Pre-label a meeting's speakers without summarizing (optional).
 
-    Returning speakers are matched automatically from your enrolled voiceprints; you only label the
-    ones that are new or uncertain. Confirmed voices are saved for next time. Writes
-    ``speakers.json`` plus per-file diarization into ``_work/diarization/``.
+    `wcfi meeting summarize` runs this same step for you when speaker identification is on — use this
+    command only when you want to name voices ahead of time. Returning speakers are matched
+    automatically from your enrolled voiceprints; you label the new or uncertain ones. Results are
+    reused by `summarize`. Writes ``speakers.json`` and ``_work/diarization/``.
     """
     require_configured()
     folder = folder.resolve()
@@ -132,10 +165,9 @@ def identify(
         raise typer.Exit(1)
 
     config = cfg.load_config()
-    match_threshold = threshold if threshold is not None else float(
-        config.get("speakers", {}).get("match_threshold", 0.65)
-    )
-    max_samples = int(config.get("speakers", {}).get("max_samples_per_speaker", 8))
+    speakers_cfg = config.get("speakers", {})
+    match_threshold = threshold if threshold is not None else float(speakers_cfg.get("match_threshold", 0.65))
+    max_samples = int(speakers_cfg.get("max_samples_per_speaker", 8))
 
     try:
         ffmpeg.require_tool("ffmpeg")
@@ -156,82 +188,43 @@ def identify(
         raise typer.Exit(1)
 
     work_dir = folder / "_work"
-    snippet_dir = work_dir / "speaker_snippets"
-    diar_dir = work_dir / "diarization"
-    diar_dir.mkdir(parents=True, exist_ok=True)
-
-    db = VoiceprintDB.load()
-    summary: dict[str, dict[str, str]] = {}
-
-    for audio in audio_files:
-        raw_path = diar_dir / f"{audio.stem}.raw.json"
-        if raw_path.exists() and not force:
-            console.print(f"\n[bold]Diarization cached[/] for {audio.name} [dim](--force to redo)[/]")
-            diar = DiarizationResult.from_dict(json.loads(raw_path.read_text(encoding="utf-8")))
-        else:
-            console.print(f"\n[bold]Diarizing[/] {audio.name} … [dim](one-time; slow on CPU)[/]")
-            try:
-                diar = diarizer.diarize(audio)
-            except DiarizerUnavailable as exc:
-                console.print(f"[red]{exc}[/]")
-                raise typer.Exit(1)
-            _write_json(raw_path, diar.to_dict())
-        if not diar.turns:
-            console.print("  [yellow]No speech detected; skipping.[/]")
-            continue
-
-        proposals = propose_from_voiceprints(diar, db, match_threshold)
-        snippets = select_representative_turns(diar.turns, per_speaker=per_speaker)
-        mapping = _walk_through(audio, diar, proposals, snippets, snippet_dir, play)
-
-        enrolled = enroll_confirmed(db, diar, mapping, max_samples=max_samples)
-        db.save()
-
-        attributed = attribute_turns(diar.turns, mapping)
-        _write_json(
-            diar_dir / f"{audio.stem}.json",
-            {
-                "source": audio.name,
-                "clusters": mapping,
-                "turns": [{"start": s, "end": e, "speaker": name} for s, e, name in attributed],
-            },
+    resolver = _make_resolver(True, work_dir / "speaker_snippets", play)
+    try:
+        _, names_by_file = resolve_meeting_speakers(
+            audio_files, diarizer=diarizer, db=VoiceprintDB.load(), work_dir=work_dir,
+            resolver=resolver, threshold=match_threshold, max_samples=max_samples,
+            force=force, snippets_per_speaker=per_speaker, log=lambda m: console.print(m),
         )
-        summary[audio.name] = mapping
-        console.print(f"  [green]Saved[/] {enrolled} voiceprint(s); {len(mapping)} cluster(s) named.")
+    except DiarizerUnavailable as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
 
+    summary = {Path(path).name: mapping for path, mapping in names_by_file.items()}
     _write_json(folder / "speakers.json", {"files": summary})
     console.print(f"\n[green]Done[/] — wrote {folder / 'speakers.json'}")
-    console.print("[dim]Next: wcfi meeting summarize <folder> (speaker-attributed minutes are on the roadmap).[/]")
+    console.print("[dim]Next: wcfi meeting summarize <folder> — the minutes will use these names.[/]")
 
 
-def _walk_through(
-    audio: Path,
-    diar: DiarizationResult,
-    proposals: dict,
-    snippets: dict,
-    snippet_dir: Path,
-    play: bool,
-) -> dict[str, str]:
-    """Ask the human to confirm/label each cluster. Returns cluster-label -> confirmed name."""
-    mapping: dict[str, str] = {}
-    for cluster in diar.labels():
-        proposal = proposals.get(cluster)
-        console.print(f"\n[bold cyan]{cluster}[/] in {audio.name}")
+def _make_resolver(interactive: bool, snippet_dir: Path, play: bool) -> ClusterResolver:
+    """Build a cluster->name resolver. Non-interactive uses voiceprint auto-matches only."""
+    if not interactive:
+        return auto_resolver
+
+    def resolver(ctx: ClusterPrompt) -> str | None:
+        proposal = ctx.proposal
+        console.print(f"\n[bold cyan]{ctx.cluster}[/] in {ctx.audio_name}")
         if proposal and proposal.name and proposal.confident:
             if typer.confirm(f"  Auto-matched [green]{proposal.name}[/] "
                              f"(similarity {proposal.score:.2f}). Correct?", default=True):
-                mapping[cluster] = proposal.name
-                continue
-
-        _preview(cluster, snippets.get(cluster, []), audio, snippet_dir, play)
-        hint = ""
-        if proposal and proposal.name:
-            hint = f" [dim](best guess: {proposal.name}, {proposal.score:.2f})[/]"
+                return proposal.name
+        _preview(ctx.cluster, ctx.turns, ctx.source_path, snippet_dir, play)
+        hint = f" [dim](best guess: {proposal.name}, {proposal.score:.2f})[/]" if (
+            proposal and proposal.name
+        ) else ""
         console.print(f"  Who is speaking?{hint}  (Enter a name, or leave blank to skip)")
-        answer = typer.prompt("  Name", default="", show_default=False).strip()
-        if answer:
-            mapping[cluster] = answer
-    return mapping
+        return typer.prompt("  Name", default="", show_default=False).strip() or None
+
+    return resolver
 
 
 def _preview(cluster: str, turns: list, audio: Path, snippet_dir: Path, play: bool) -> None:
