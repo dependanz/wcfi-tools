@@ -86,6 +86,11 @@ It plays a few snippets per voice (via `ffplay` if present) and asks "who is spe
 any auto-matches from your voiceprint database. Results are written to `speakers.json` and
 `_work/diarization/`.
 
+**No GPU needed.** Diarization runs on CPU by default (it auto-uses CUDA only if available), so it
+works on any laptop — just slower: budget roughly 1–3× the recording length on CPU. It's a one-time
+cost per meeting: the raw diarization is cached in `_work/diarization/`, so re-running the
+walk-through is instant. Use `--force` to recompute, or `--device cpu|cuda` to pin the device.
+
 Manage the voiceprint database:
 
 ```bash

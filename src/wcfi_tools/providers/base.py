@@ -71,6 +71,21 @@ class DiarizationResult:
             return sorted(self.embeddings)
         return sorted({turn.speaker for turn in self.turns})
 
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-serialisable form, for caching the (slow) diarization pass."""
+        return {
+            "turns": [[t.start, t.end, t.speaker] for t in self.turns],
+            "embeddings": self.embeddings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DiarizationResult":
+        turns = [SpeakerTurn(float(s), float(e), str(spk)) for s, e, spk in data.get("turns", [])]
+        embeddings = {
+            str(k): [float(x) for x in v] for k, v in data.get("embeddings", {}).items()
+        }
+        return cls(turns=turns, embeddings=embeddings)
+
 
 @runtime_checkable
 class Diarizer(Protocol):

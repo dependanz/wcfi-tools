@@ -85,6 +85,16 @@ def _diar() -> DiarizationResult:
     return DiarizationResult(turns=turns, embeddings=embeddings)
 
 
+def test_diarization_result_roundtrips():
+    diar = _diar()
+    restored = DiarizationResult.from_dict(diar.to_dict())
+    assert [(t.start, t.end, t.speaker) for t in restored.turns] == [
+        (t.start, t.end, t.speaker) for t in diar.turns
+    ]
+    assert restored.embeddings == diar.embeddings
+    assert restored.labels() == diar.labels()
+
+
 def test_propose_from_voiceprints():
     db = VoiceprintDB()
     db.enroll("Pastor Jun", [1.0, 0.0, 0.0])

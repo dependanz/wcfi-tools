@@ -60,13 +60,19 @@ def build_transcriber(config: dict[str, Any], *, model: str | None = None) -> Tr
 
 
 def build_diarizer(
-    config: dict[str, Any], *, provider: str | None = None, model: str | None = None
+    config: dict[str, Any],
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    device: str | None = None,
 ) -> Diarizer:
     provider = provider or config["providers"].get("diarizer", "pyannote")
     if provider == "pyannote":
         from .pyannote_provider import PyannoteDiarizer
 
-        return PyannoteDiarizer(_require_key("hf"), model or config["models"]["diarization"])
+        return PyannoteDiarizer(
+            _require_key("hf"), model or config["models"]["diarization"], device=device
+        )
     raise ProviderError(
         f"Unknown diarizer provider: {provider!r} (expected 'pyannote'). "
         f"Local speaker identification currently uses pyannote.audio."

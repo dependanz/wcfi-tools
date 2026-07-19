@@ -116,6 +116,8 @@ def identify(
     per_speaker: int = typer.Option(3, "--per-speaker", help="Snippets to preview per speaker."),
     play: bool = typer.Option(True, "--play/--no-play", help="Play snippets with ffplay if available."),
     threshold: float | None = typer.Option(None, "--threshold", help="Cosine auto-match threshold."),
+    device: str = typer.Option("auto", "--device", help="Inference device: auto|cpu|cuda."),
+    force: bool = typer.Option(False, "--force", help="Re-run diarization even if a cache exists."),
 ) -> None:
     """Diarize a meeting and walk you through naming each speaker (local, pyannote).
 
@@ -143,7 +145,7 @@ def identify(
         raise typer.Exit(1)
 
     try:
-        diarizer = build_diarizer(config)
+        diarizer = build_diarizer(config, device=None if device == "auto" else device)
     except ProviderError as exc:
         console.print(f"[red]{exc}[/]")
         raise typer.Exit(1)
@@ -162,12 +164,18 @@ def identify(
     summary: dict[str, dict[str, str]] = {}
 
     for audio in audio_files:
-        console.print(f"\n[bold]Diarizing[/] {audio.name} …")
-        try:
-            diar = diarizer.diarize(audio)
-        except DiarizerUnavailable as exc:
-            console.print(f"[red]{exc}[/]")
-            raise typer.Exit(1)
+        raw_path = diar_dir / f"{audio.stem}.raw.json"
+        if raw_path.exists() and not force:
+            console.print(f"\n[bold]Diarization cached[/] for {audio.name} [dim](--force to redo)[/]")
+            diar = DiarizationResult.from_dict(json.loads(raw_path.read_text(encoding="utf-8")))
+        else:
+            console.print(f"\n[bold]Diarizing[/] {audio.name} … [dim](one-time; slow on CPU)[/]")
+            try:
+                diar = diarizer.diarize(audio)
+            except DiarizerUnavailable as exc:
+                console.print(f"[red]{exc}[/]")
+                raise typer.Exit(1)
+            _write_json(raw_path, diar.to_dict())
         if not diar.turns:
             console.print("  [yellow]No speech detected; skipping.[/]")
             continue
