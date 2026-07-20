@@ -18,7 +18,10 @@ def _modules():
     try:
         from ..speaker import embed, identify, models, store, vad
     except ImportError:
-        console.print('[red]Speaker features need the extra:[/] pip install ".[speaker]"')
+        console.print(
+            '[red]Speaker identification needs the optional extra[/] (torch-free). Install it, then '
+            'retry:\n  pip install -e ".\\[speaker]"'
+        )
         raise typer.Exit(1) from None
     return embed, identify, models, store, vad
 
