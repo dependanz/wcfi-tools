@@ -51,8 +51,26 @@ def test_annotator_app(tmp_path):
 
     clip = tmp_path / "v.wav"
     clip.write_bytes(b"RIFF0000WAVE")
-    state = AnnotatorState(speakers=[{"label": "Voice 1", "seconds": 12, "count": 1}], files={"Voice 1": [clip]})
+    state = AnnotatorState(
+        speakers=[{"label": "Voice 1", "seconds": 12, "count": 1}],
+        files={"Voice 1": [clip]},
+        known_names=["Donna Reyes"],
+    )
     client = TestClient(build_app(state))
     assert client.get("/").status_code == 200
+    data = client.get("/data").json()
+    assert data["voices"][0]["label"] == "Voice 1" and data["known"] == ["Donna Reyes"]
+    assert client.get("/snippet", params={"speaker": "Voice 1", "idx": 0}).status_code == 200
     assert client.post("/submit", json={"labels": {"Voice 1": "Joy Rimundo"}}).json()["ok"] is True
-    assert state.result == {"Voice 1": "Joy Rimundo"}
+    assert state.result == {"Voice 1": "Joy Rimundo"} and state.done.is_set()
+
+
+def test_annotator_cancel():
+    from fastapi.testclient import TestClient
+
+    from wcfi_tools.web.annotator import AnnotatorState, build_app
+
+    state = AnnotatorState(speakers=[{"label": "Voice 1", "seconds": 5, "count": 0}], files={})
+    client = TestClient(build_app(state))
+    assert client.post("/cancel").json()["ok"] is True
+    assert state.cancelled is True and state.done.is_set()

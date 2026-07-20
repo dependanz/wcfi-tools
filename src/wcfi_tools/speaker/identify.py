@@ -85,21 +85,28 @@ def cluster_unknown(segs: list[Seg], *, threshold: float = 0.55) -> dict[str, li
 
 
 def snippets_for(
-    clusters: dict[str, list[Seg]], work_dir: Path, *, per: int = 2, max_sec: float = 6.0
+    clusters: dict[str, list[Seg]], work_dir: Path, *, per: int = 2, clip_sec: float = 4.0
 ) -> tuple[dict[str, list[Path]], dict[str, float]]:
-    """Cut representative clips per cluster for the annotator. Returns (snippets, seconds)."""
+    """Cut the most-representative clips per cluster (closest to its centroid, short → cleaner
+    single voice) for the annotator. Returns (snippets, seconds)."""
     snip_dir = Path(work_dir) / "snippets"
     snip_dir.mkdir(parents=True, exist_ok=True)
+    n = int(clip_sec * 16000)
     snippets: dict[str, list[Path]] = {}
     seconds: dict[str, float] = {}
     for label, members in clusters.items():
         seconds[label] = sum(m.end - m.start for m in members)
-        longest = sorted(members, key=lambda s: len(s.samples), reverse=True)[:per]
+        centroid = sum(m.emb for m in members)
+        centroid = centroid / (np.linalg.norm(centroid) or 1.0)
+        ranked = sorted(members, key=lambda m: float(m.emb @ centroid), reverse=True)[:per]
         paths = []
-        for k, s in enumerate(longest):
-            clip = s.samples[: int(max_sec * 16000)]
+        for k, m in enumerate(ranked):
+            samp = m.samples
+            if len(samp) > n:  # take the middle clip_sec seconds
+                start = (len(samp) - n) // 2
+                samp = samp[start : start + n]
             p = snip_dir / f"{label.replace(' ', '_')}_{k}.wav"
-            write_wav(p, clip)
+            write_wav(p, samp)
             paths.append(p)
         snippets[label] = paths
     return snippets, seconds

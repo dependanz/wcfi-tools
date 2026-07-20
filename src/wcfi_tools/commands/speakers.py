@@ -43,6 +43,11 @@ def _roster_note(names) -> str:
     )
 
 
+# A real recurring speaker talks for at least this many seconds total; smaller clusters are
+# one-off blips / cross-talk and are dropped so there aren't dozens of "voices" to name.
+MIN_CLUSTER_SEC = 6.0
+
+
 def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: float = 0.5):
     """Analyze audio → match to store → cluster + annotate unknowns. Returns (present, newly_saved)."""
     embed, identify, models, store, vad = _modules()
@@ -55,11 +60,20 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: 
     newly: dict[str, int] = {}
     unknown = [s for s in segs if s.name is None]
     if annotate and unknown:
-        clusters = identify.cluster_unknown(unknown, threshold=threshold)
+        raw = identify.cluster_unknown(unknown, threshold=threshold)
+        big = [(members) for members in raw.values() if sum(s.end - s.start for s in members) >= MIN_CLUSTER_SEC]
+        big.sort(key=lambda m: sum(s.end - s.start for s in m), reverse=True)
+        clusters = {f"Voice {i + 1}": members for i, members in enumerate(big)}
+        if not clusters:
+            return present, newly
+        console.print(f"  {len(clusters)} distinct voice(s) to name.")
         snippets, seconds = identify.snippets_for(clusters, Path(work_dir))
         from ..web import run_annotator
 
-        labels = run_annotator(snippets, seconds, known_names=list(voiceprints))
+        labels, cancelled = run_annotator(snippets, seconds, known_names=list(voiceprints))
+        if cancelled:
+            console.print("[yellow]Speaker attribution cancelled — using auto-matched names only.[/]")
+            return present, newly
         for label, name in labels.items():
             name = (name or "").strip()
             if name and name.lower() != "unsure":
