@@ -74,6 +74,28 @@ def test_annotator_app(tmp_path):
     assert state.result == {"Voice 1": "Joy Rimundo"} and state.done.is_set()
 
 
+class _FakeEmbedder:
+    def embed(self, x):
+        v = np.array([1.0, float(len(x) % 7), 0.0], dtype=np.float32)
+        return v / (np.linalg.norm(v) or 1)
+
+
+def test_mel_spectrogram_shape():
+    from wcfi_tools.speaker import viz
+
+    spec = viz.mel_spectrogram(np.random.randn(16000 * 3).astype(np.float32), n_mels=32, n_frames=64)
+    assert len(spec) <= 64 and len(spec[0]) == 32
+    flat = [x for row in spec for x in row]
+    assert 0.0 <= min(flat) and max(flat) <= 1.0
+
+
+def test_clip_viz_runs():
+    from wcfi_tools.speaker import viz
+
+    d = viz.clip_viz(np.random.randn(16000 * 3).astype(np.float32), np.array([1, 0, 0], np.float32), _FakeEmbedder())
+    assert d["dur"] == 3.0 and len(d["spec"]) > 0 and len(d["scores"]) > 0
+
+
 def test_annotator_cancel():
     from fastapi.testclient import TestClient
 

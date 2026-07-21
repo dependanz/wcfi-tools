@@ -124,77 +124,108 @@ def run_annotator(
 _PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><title>wcfi — who is speaking?</title>
 <style>
- body{font-family:system-ui,Segoe UI,sans-serif;max-width:660px;margin:1.5rem auto;padding:0 1rem;
-      background:#0f1115;color:#e6e6e6}
- h1{font-size:1.3rem;margin-bottom:.2rem}
- .prog{color:#9aa0a6;margin-bottom:.3rem}
- .hint{color:#7ea6ff;font-size:.82rem;margin-bottom:.8rem}
- .card{background:#1a1d24;border:1px solid #2a2e37;border-radius:10px;padding:1rem;margin:.6rem 0}
- .meta{color:#9aa0a6;font-size:.85rem;margin-bottom:.5rem}
- .clip{margin-bottom:.8rem}
- canvas{width:100%;height:110px;border-radius:6px;background:#000;display:block}
- audio{width:100%;margin-top:.3rem}
- input{width:60%;padding:.55rem;border-radius:6px;border:1px solid #3a3f4b;background:#0f1115;color:#e6e6e6}
- button{padding:.55rem .9rem;border-radius:6px;border:1px solid #3a3f4b;background:#232833;color:#e6e6e6;cursor:pointer;margin:.2rem .2rem 0 0}
- .row{margin-top:.6rem;display:flex;justify-content:space-between;align-items:center}
- #next{background:#2f6feb;border-color:#2f6feb;font-weight:600}
- #cancel{background:transparent;border-color:#5a3a3a;color:#e79aa0}
- #done{display:none;color:#7ee787;font-weight:600;margin-top:1rem}
- .key{color:#5ddc78}
+ :root{--bg:#0f1115;--card:#171a21;--line:#272b34;--muted:#9aa0a6;--accent:#2f6feb;--green:#5ddc78}
+ *{box-sizing:border-box}
+ body{font-family:system-ui,Segoe UI,sans-serif;max-width:680px;margin:1.4rem auto;padding:0 1rem;background:var(--bg);color:#e8e8ea}
+ h1{font-size:1.3rem;margin:0 0 .15rem}
+ .prog{color:var(--muted);margin-bottom:.3rem;font-size:.9rem}
+ .hint{color:#8fb0ff;font-size:.82rem;margin-bottom:.9rem;line-height:1.4}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:1rem;margin:.6rem 0}
+ .meta{color:var(--muted);font-size:.85rem;margin-bottom:.7rem}
+ .clip{margin-bottom:1rem}
+ .specwrap{position:relative;line-height:0}
+ canvas.spec{width:100%;height:150px;display:block;border-radius:8px 8px 0 0;background:#000}
+ canvas.hl{width:100%;height:14px;display:block;border-radius:0 0 8px 8px;background:#0c0d10}
+ .playhead{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.85);left:0;display:none;pointer-events:none;box-shadow:0 0 4px rgba(255,255,255,.6)}
+ .player{display:flex;align-items:center;gap:.7rem;margin-top:.55rem}
+ .pp{width:40px;height:40px;min-width:40px;border-radius:50%;border:1px solid var(--line);background:#232833;color:#fff;font-size:.95rem;cursor:pointer;padding:0}
+ .pp:hover{background:#2b3140}
+ .seek{flex:1;height:7px;background:#2a2e37;border-radius:4px;position:relative;cursor:pointer}
+ .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:4px}
+ .tm{color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+ .lbl{color:var(--green);font-size:.72rem;margin:.25rem 0 0;letter-spacing:.02em}
+ input#nm{width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--line);background:#0f1115;color:#e8e8ea;font-size:.95rem;margin-top:.4rem}
+ .btns{margin-top:.7rem;display:flex;justify-content:space-between;align-items:center}
+ button{padding:.55rem 1rem;border-radius:8px;border:1px solid var(--line);background:#232833;color:#e8e8ea;cursor:pointer;margin-right:.35rem}
+ button:disabled{opacity:.4;cursor:default}
+ #next{background:var(--accent);border-color:var(--accent);font-weight:600}
+ #cancel{background:transparent;border-color:#5a3a3a;color:#e79aa0;margin-top:.9rem}
+ #done{display:none;color:var(--green);font-weight:600;margin-top:1rem}
+ .k{color:var(--green)}
 </style></head><body>
 <h1>Who is speaking?</h1>
 <div class="prog" id="prog"></div>
-<div class="hint">The <span class="key">green highlight</span> marks where this voice is talking. If a clip has two people, name the person in the green part (or mark Unsure).</div>
+<div class="hint">The <span class="k">green strip</span> under each spectrogram marks where <b>this</b> voice is talking. If a clip has two people, name the one in the green part — or mark Unsure.</div>
 <div id="card" class="card"></div>
-<div class="row">
+<div class="btns">
   <div><button id="back">← Back</button><button id="unsure">Unsure</button></div>
   <button id="next">Next →</button>
 </div>
-<div style="margin-top:1rem"><button id="cancel">Cancel attribution</button></div>
+<button id="cancel">Cancel attribution</button>
 <div id="done"></div>
 <datalist id="names"></datalist>
 <script>
 let DATA=null, i=0; const names={};
-async function load(){ DATA=await (await fetch('/data')).json(); render(); }
-function knownList(){ const s=new Set(DATA.known||[]); Object.values(names).forEach(n=>{if(n)s.add(n);}); return [...s].sort(); }
-function drawClip(cv, d){
-  const spec=d.spec; if(!spec||!spec.length) return;
-  const T=spec.length, B=spec[0].length;
-  const off=document.createElement('canvas'); off.width=T; off.height=B;
-  const octx=off.getContext('2d'); const img=octx.createImageData(T,B);
-  for(let x=0;x<T;x++){ for(let y=0;y<B;y++){ const v=spec[x][B-1-y]; const p=(y*T+x)*4;
-    const g=Math.round(30+v*225); img.data[p]=g*0.5; img.data[p+1]=g*0.7; img.data[p+2]=g; img.data[p+3]=255; } }
+const $=id=>document.getElementById(id);
+const el=(t,c)=>{const e=document.createElement(t); if(c)e.className=c; return e;};
+const fmt=s=>{s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+function inferno(v){ v=Math.max(0,Math.min(1,v));
+  const s=[[0,0,4],[60,15,110],[150,44,90],[221,81,58],[249,153,29],[252,255,164]];
+  const t=v*(s.length-1), j=Math.min(Math.floor(t),s.length-2), f=t-j, a=s[j], b=s[j+1];
+  return [a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f]; }
+function drawSpec(cv, spec){ if(!spec||!spec.length)return;
+  const T=spec.length, M=spec[0].length;
+  const off=el('canvas'); off.width=T; off.height=M; const octx=off.getContext('2d'); const img=octx.createImageData(T,M);
+  for(let x=0;x<T;x++)for(let y=0;y<M;y++){ const [r,g,b]=inferno(spec[x][M-1-y]); const p=(y*T+x)*4; img.data[p]=r;img.data[p+1]=g;img.data[p+2]=b;img.data[p+3]=255; }
   octx.putImageData(img,0,0);
-  const W=cv.width=cv.clientWidth||560, H=cv.height=110; const g=cv.getContext('2d');
-  g.imageSmoothingEnabled=false; g.clearRect(0,0,W,H); g.drawImage(off,0,0,W,H);
-  (d.scores||[]).forEach(s=>{ const x0=s.t0/d.dur*W, x1=s.t1/d.dur*W;
-    const a=Math.max(0,Math.min(1,(s.score-0.4)/0.4)); if(a<=0)return;
-    g.fillStyle='rgba(93,220,120,'+(0.40*a)+')'; g.fillRect(x0,0,x1-x0,H); });
+  const W=cv.width=Math.max(1,cv.clientWidth), H=cv.height=150, g=cv.getContext('2d'); g.imageSmoothingEnabled=true; g.drawImage(off,0,0,W,H); }
+function drawHl(cv, scores, dur){ const W=cv.width=Math.max(1,cv.clientWidth), H=cv.height=14, g=cv.getContext('2d');
+  g.fillStyle='#0c0d10'; g.fillRect(0,0,W,H); if(!scores||!scores.length)return;
+  const c=scores.map(s=>({t:(s.t0+s.t1)/2, v:s.score}));
+  for(let x=0;x<W;x++){ const t=x/W*dur; let v=c[0].v;
+    if(t>=c[c.length-1].t) v=c[c.length-1].v;
+    else for(let j=0;j<c.length-1;j++){ if(t>=c[j].t&&t<=c[j+1].t){ const f=(t-c[j].t)/((c[j+1].t-c[j].t)||1); v=c[j].v+(c[j+1].v-c[j].v)*f; break; } }
+    const a=Math.max(0,Math.min(1,(v-0.35)/0.45)); g.fillStyle='rgba(93,220,120,'+a+')'; g.fillRect(x,0,1,H); } }
+function makeClip(label,k){
+  const wrap=el('div','clip'), sw=el('div','specwrap'), spec=el('canvas','spec'), ph=el('div','playhead'), hl=el('canvas','hl');
+  sw.append(spec,ph);
+  const player=el('div','player'), pp=el('button','pp'), seek=el('div','seek'), fill=el('div','fill'), tm=el('span','tm');
+  pp.textContent='▶'; seek.append(fill); tm.textContent='0:00 / 0:00'; player.append(pp,seek,tm);
+  wrap.append(sw,hl,player);
+  const audio=new Audio(`/snippet?speaker=${encodeURIComponent(label)}&idx=${k}`); audio.preload='metadata';
+  const redraw=d=>{drawSpec(spec,d.spec); drawHl(hl,d.scores,d.dur);};
+  fetch(`/clip?speaker=${encodeURIComponent(label)}&idx=${k}`).then(r=>r.json()).then(d=>{ requestAnimationFrame(()=>redraw(d)); });
+  pp.onclick=()=>{ document.querySelectorAll('audio').forEach(a=>{if(a!==audio)a.pause();}); if(audio.paused){audio.play();pp.textContent='⏸';}else{audio.pause();pp.textContent='▶';} };
+  audio.onloadedmetadata=()=>{ tm.textContent='0:00 / '+fmt(audio.duration); };
+  audio.ontimeupdate=()=>{ const p=(audio.currentTime/(audio.duration||1)); fill.style.width=(p*100)+'%'; ph.style.display='block'; ph.style.left=(p*100)+'%'; tm.textContent=fmt(audio.currentTime)+' / '+fmt(audio.duration); };
+  audio.onended=()=>{pp.textContent='▶'; ph.style.display='none';};
+  audio.onpause=()=>{pp.textContent='▶';};
+  seek.onclick=e=>{ const r=seek.getBoundingClientRect(); audio.currentTime=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*(audio.duration||0); };
+  return wrap;
 }
+function knownList(){ const s=new Set(DATA.known||[]); Object.values(names).forEach(n=>{if(n)s.add(n);}); return [...s].sort(); }
 function render(){
   const v=DATA.voices[i];
-  document.getElementById('prog').textContent=`Voice ${i+1} of ${DATA.voices.length}`;
+  $('prog').textContent=`Voice ${i+1} of ${DATA.voices.length}`;
   const mm=Math.floor(v.seconds/60), ss=v.seconds%60;
-  let h=`<div class="meta">${mm}m ${ss}s total across the meeting · ${v.count} sample clip(s)</div>`;
-  for(let k=0;k<v.count;k++) h+=`<div class="clip"><canvas id="cv${k}"></canvas><audio controls preload="none" src="/snippet?speaker=${encodeURIComponent(v.label)}&idx=${k}"></audio></div>`;
-  h+=`<div><input id="nm" list="names" placeholder="Type or pick a name…" value="${(names[v.label]||'').replace(/"/g,'&quot;')}"></div>`;
-  document.getElementById('card').innerHTML=h;
-  const dl=document.getElementById('names'); dl.innerHTML=''; knownList().forEach(n=>{const o=document.createElement('option');o.value=n;dl.appendChild(o);});
-  for(let k=0;k<v.count;k++){ (async()=>{ const d=await (await fetch(`/clip?speaker=${encodeURIComponent(v.label)}&idx=${k}`)).json(); drawClip(document.getElementById('cv'+k), d); })(); }
-  document.getElementById('back').disabled=(i===0);
-  document.getElementById('next').textContent=(i===DATA.voices.length-1)?'Finish & save':'Next →';
-  document.getElementById('nm').focus();
+  const card=$('card'); card.innerHTML='';
+  const meta=el('div','meta'); meta.textContent=`${mm}m ${ss}s total across the meeting · ${v.count} sample clip(s)`; card.append(meta);
+  for(let k=0;k<v.count;k++) card.append(makeClip(v.label,k));
+  const inp=el('input'); inp.id='nm'; inp.setAttribute('list','names'); inp.placeholder='Type or pick a name…'; inp.value=names[v.label]||''; card.append(inp);
+  const dl=$('names'); dl.innerHTML=''; knownList().forEach(n=>{const o=el('option'); o.value=n; dl.append(o);});
+  $('back').disabled=(i===0); $('next').textContent=(i===DATA.voices.length-1)?'Finish & save':'Next →';
+  inp.focus();
 }
-function save(){ names[DATA.voices[i].label]=document.getElementById('nm').value.trim(); }
-document.getElementById('unsure').onclick=()=>{document.getElementById('nm').value='Unsure';};
-document.getElementById('back').onclick=()=>{save(); if(i>0){i--;render();}};
-document.getElementById('next').onclick=async()=>{ save();
-  if(i<DATA.voices.length-1){ i++; render(); return; }
-  await fetch('/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:names})});
-  finish('Saved.'); };
-document.getElementById('cancel').onclick=async()=>{ await fetch('/cancel',{method:'POST'}); finish('Cancelled.'); };
-function finish(msg){ for(const id of ['card','back','unsure','next','cancel','prog']){const el=document.getElementById(id); if(el)el.style.display='none';}
-  const d=document.getElementById('done'); d.textContent=msg+' Closing…'; d.style.display='block';
+const save=()=>{ const inp=$('nm'); if(inp) names[DATA.voices[i].label]=inp.value.trim(); };
+$('unsure').onclick=()=>{ const inp=$('nm'); if(inp) inp.value='Unsure'; };
+$('back').onclick=()=>{ save(); if(i>0){i--;render();} };
+$('next').onclick=async()=>{ save(); if(i<DATA.voices.length-1){ i++; render(); return; }
+  await fetch('/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:names})}); finish('Saved.'); };
+$('cancel').onclick=async()=>{ await fetch('/cancel',{method:'POST'}); finish('Cancelled.'); };
+function finish(msg){ document.querySelectorAll('audio').forEach(a=>a.pause());
+  for(const id of ['card','back','unsure','next','cancel','prog']){const e=$(id); if(e)e.style.display='none';}
+  const d=$('done'); d.textContent=msg+' Closing…'; d.style.display='block';
   setTimeout(()=>{ try{window.close();}catch(e){} d.textContent=msg+' You can close this tab.'; }, 400); }
+async function load(){ DATA=await (await fetch('/data')).json(); render(); }
 load();
 </script></body></html>"""
