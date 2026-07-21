@@ -84,29 +84,33 @@ def cluster_unknown(segs: list[Seg], *, threshold: float = 0.55) -> dict[str, li
     return {f"Voice {c + 1}": [unknown[k] for k in g] for c, g in enumerate(groups)}
 
 
-def snippets_for(
-    clusters: dict[str, list[Seg]], work_dir: Path, *, per: int = 2, clip_sec: float = 4.0
-) -> tuple[dict[str, list[Path]], dict[str, float]]:
-    """Cut the most-representative clips per cluster (closest to its centroid, short → cleaner
-    single voice) for the annotator. Returns (snippets, seconds)."""
+def prepare_annotation(
+    clusters: dict[str, list[Seg]], work_dir: Path, embedder, *, per: int = 2, clip_sec: float = 4.0
+) -> list[dict]:
+    """Pick the most-representative clips per voice (closest to its centroid, trimmed short), cut
+    wavs, and compute spectrogram + target-highlight data. Returns a list of
+    ``{label, seconds, clips: [{path, spec, scores, dur}]}``."""
+    from . import viz
+
     snip_dir = Path(work_dir) / "snippets"
     snip_dir.mkdir(parents=True, exist_ok=True)
     n = int(clip_sec * 16000)
-    snippets: dict[str, list[Path]] = {}
-    seconds: dict[str, float] = {}
+    voices: list[dict] = []
     for label, members in clusters.items():
-        seconds[label] = sum(m.end - m.start for m in members)
         centroid = sum(m.emb for m in members)
         centroid = centroid / (np.linalg.norm(centroid) or 1.0)
         ranked = sorted(members, key=lambda m: float(m.emb @ centroid), reverse=True)[:per]
-        paths = []
+        clips = []
         for k, m in enumerate(ranked):
             samp = m.samples
-            if len(samp) > n:  # take the middle clip_sec seconds
+            if len(samp) > n:  # middle clip_sec seconds
                 start = (len(samp) - n) // 2
                 samp = samp[start : start + n]
-            p = snip_dir / f"{label.replace(' ', '_')}_{k}.wav"
-            write_wav(p, samp)
-            paths.append(p)
-        snippets[label] = paths
-    return snippets, seconds
+            path = snip_dir / f"{label.replace(' ', '_')}_{k}.wav"
+            write_wav(path, samp)
+            v = viz.clip_viz(samp, centroid, embedder)
+            clips.append({"path": path, "spec": v["spec"], "scores": v["scores"], "dur": v["dur"]})
+        voices.append(
+            {"label": label, "seconds": round(sum(m.end - m.start for m in members)), "clips": clips}
+        )
+    return voices

@@ -66,11 +66,11 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: 
         clusters = {f"Voice {i + 1}": members for i, members in enumerate(big)}
         if not clusters:
             return present, newly
-        console.print(f"  {len(clusters)} distinct voice(s) to name.")
-        snippets, seconds = identify.snippets_for(clusters, Path(work_dir))
+        console.print(f"  {len(clusters)} distinct voice(s) to name; preparing clips…")
+        voices = identify.prepare_annotation(clusters, Path(work_dir), embedder)
         from ..web import run_annotator
 
-        labels, cancelled = run_annotator(snippets, seconds, known_names=list(voiceprints))
+        labels, cancelled = run_annotator(voices, known_names=list(voiceprints))
         if cancelled:
             console.print("[yellow]Speaker attribution cancelled — using auto-matched names only.[/]")
             return present, newly
