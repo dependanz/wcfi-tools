@@ -114,10 +114,20 @@ def _setup_diarization(config: dict) -> None:
         except Exception:  # noqa: BLE001
             pass
         token = Prompt.ask("  Paste your Hugging Face token", password=True).strip()
-        who = hf.whoami(token) if token else None
-        if not who:
-            console.print("  [yellow]No valid token — leaving speaker separation on the built-in engine.[/]")
+        if not token:
+            console.print("  [yellow]No token entered — leaving speaker separation on the built-in engine.[/]")
             config.setdefault("diarize", {})["backend"] = "onnx"
+            return
+        who = hf.whoami(token)
+        if not who:
+            if hf.reachable():  # HF answered, so it genuinely rejected the token
+                console.print("  [red]Hugging Face rejected that token.[/] Use a [bold]Read[/] token, then re-run setup.")
+                config.setdefault("diarize", {})["backend"] = "onnx"
+                return
+            # couldn't reach HF (its connections reset intermittently) — trust the token, verify later
+            console.print("  [yellow]Couldn't reach Hugging Face just now[/] (network reset). Saving the token; wcfi will verify it on first use.")
+            cfg.set_secret("huggingface", token)
+            config.setdefault("diarize", {})["backend"] = "pyannote"
             return
         cfg.set_secret("huggingface", token)
     console.print(f"  [green]OK[/] Hugging Face token ({who}).")

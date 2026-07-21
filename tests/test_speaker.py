@@ -84,6 +84,63 @@ def test_hf_check_access_gated(monkeypatch):
     assert status == "gated"
 
 
+def test_hf_get_retries_transient_then_succeeds(monkeypatch):
+    from wcfi_tools.speaker import hf
+
+    calls = {"n": 0}
+
+    class _Resp:
+        pass
+
+    def flaky(req, timeout=None):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise ConnectionResetError("forcibly closed")
+        return _Resp()
+
+    monkeypatch.setattr(hf.urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(hf.time, "sleep", lambda *_: None)
+    assert isinstance(hf._get("https://huggingface.co/x", None), _Resp)
+    assert calls["n"] == 3  # retried past the two resets
+
+
+def test_hf_get_does_not_retry_http_error(monkeypatch):
+    import urllib.error
+
+    import pytest
+
+    from wcfi_tools.speaker import hf
+
+    calls = {"n": 0}
+
+    def http401(req, timeout=None):
+        calls["n"] += 1
+        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
+
+    monkeypatch.setattr(hf.urllib.request, "urlopen", http401)
+    monkeypatch.setattr(hf.time, "sleep", lambda *_: None)
+    with pytest.raises(urllib.error.HTTPError):
+        hf._get("https://huggingface.co/x", "tok")
+    assert calls["n"] == 1  # a real HTTP status is definitive — not retried
+
+
+def test_hf_reachable_distinguishes_network_from_auth(monkeypatch):
+    import urllib.error
+
+    from wcfi_tools.speaker import hf
+
+    def http401(url, token, timeout=20.0):
+        raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
+
+    def reset(url, token, timeout=20.0):
+        raise ConnectionResetError("forcibly closed")
+
+    monkeypatch.setattr(hf, "_get", http401)
+    assert hf.reachable() is True  # 401 means we reached HF
+    monkeypatch.setattr(hf, "_get", reset)
+    assert hf.reachable() is False  # network reset means we didn't
+
+
 def test_config_exposes_hf_token_and_diarize_backend():
     from wcfi_tools import config as cfg
 

@@ -7,8 +7,11 @@ whether they've accepted the model terms *before* the heavy diarization extra is
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
+
+_RETRIES = 6  # huggingface.co connections reset in bursts on some networks; retry transient ones
 
 # pyannote's community pipeline: CC-BY-4.0, self-contained (all weights in this one repo), one-time
 # gate acceptance. See https://huggingface.co/pyannote/speaker-diarization-community-1
@@ -21,10 +24,32 @@ class GatedModelError(RuntimeError):
     """The pyannote model can't be downloaded — no token, bad token, or terms not accepted yet."""
 
 
-def _get(url: str, token: str | None, timeout: float = 15.0):
+def _get(url: str, token: str | None, timeout: float = 20.0):
+    """GET with retries on transient network errors (connection reset / timeout). An HTTP status
+    (401/403/…) is a definitive answer and is raised immediately without retrying."""
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    req = urllib.request.Request(url, headers=headers)
-    return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310 - fixed https host
+    last: Exception | None = None
+    for attempt in range(_RETRIES):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310 - fixed https host
+        except urllib.error.HTTPError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - reset / DNS / TLS blip; retry
+            last = exc
+            time.sleep(0.5 * (attempt + 1))
+    raise last if last else RuntimeError("unreachable")
+
+
+def reachable() -> bool:
+    """True if huggingface.co answers at all — an unauthenticated 401 still means we reached it."""
+    try:
+        with _get("https://huggingface.co/api/whoami-v2", None):
+            return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:  # noqa: BLE001 - genuinely can't reach the host
+        return False
 
 
 def whoami(token: str) -> str | None:
