@@ -1,0 +1,56 @@
+"""Hugging Face gate helpers for the pyannote backend — stdlib only.
+
+Kept dependency-free (no pyannote/torch/sherpa) so ``wcfi setup`` can check a user's token and
+whether they've accepted the model terms *before* the heavy diarization extra is installed.
+"""
+
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+
+# pyannote's community pipeline: CC-BY-4.0, self-contained (all weights in this one repo), one-time
+# gate acceptance. See https://huggingface.co/pyannote/speaker-diarization-community-1
+MODEL = "pyannote/speaker-diarization-community-1"
+ACCEPT_URL = f"https://huggingface.co/{MODEL}"
+TOKENS_URL = "https://huggingface.co/settings/tokens"
+
+
+class GatedModelError(RuntimeError):
+    """The pyannote model can't be downloaded — no token, bad token, or terms not accepted yet."""
+
+
+def _get(url: str, token: str | None, timeout: float = 15.0):
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    req = urllib.request.Request(url, headers=headers)
+    return urllib.request.urlopen(req, timeout=timeout)  # noqa: S310 - fixed https host
+
+
+def whoami(token: str) -> str | None:
+    """Return the HF username for a token, or None if the token is invalid/unreachable."""
+    try:
+        with _get("https://huggingface.co/api/whoami-v2", token) as resp:
+            return json.load(resp).get("name")
+    except Exception:  # noqa: BLE001 - any failure means "can't confirm the token"
+        return None
+
+
+def check_access(token: str | None, model: str = MODEL) -> tuple[str, str]:
+    """Diagnose access to a gated repo without downloading it.
+
+    Returns one of ``("ok"|"no_token"|"bad_token"|"gated"|"error", detail)``. ``config.yaml`` is a
+    small non-LFS file, so a successful GET means the gate is accepted for this token.
+    """
+    if not token:
+        return "no_token", ""
+    url = f"https://huggingface.co/{model}/resolve/main/config.yaml"
+    try:
+        with _get(url, token):
+            return "ok", ""
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return ("gated", str(exc)) if whoami(token) else ("bad_token", str(exc))
+        return "error", str(exc)
+    except Exception as exc:  # noqa: BLE001 - offline / DNS / TLS
+        return "error", str(exc)

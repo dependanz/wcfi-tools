@@ -59,6 +59,31 @@ def match(segs: list[Seg], voiceprints: dict[str, np.ndarray], *, threshold: flo
         s.name = names[j] if float(sims[j]) >= threshold else None
 
 
+def match_clusters(
+    clusters: dict[str, list[Seg]], voiceprints: dict[str, np.ndarray], *, threshold: float = 0.5
+) -> tuple[dict[str, str], dict[str, list[Seg]]]:
+    """Assign each *whole* cluster to the nearest registered speaker by centroid similarity (used by
+    the pyannote backend, which already groups turns by speaker). Returns
+    ``(named={label: name}, unknown={label: [Seg]})``; named clusters' segments get ``.name`` set."""
+    names = list(voiceprints)
+    mat = np.stack([voiceprints[n] for n in names]) if names else None
+    named: dict[str, str] = {}
+    unknown: dict[str, list[Seg]] = {}
+    for label, segs in clusters.items():
+        if mat is not None and segs:
+            cen = sum(s.emb for s in segs)
+            cen = cen / (np.linalg.norm(cen) or 1.0)
+            sims = mat @ cen
+            j = int(np.argmax(sims))
+            if float(sims[j]) >= threshold:
+                for s in segs:
+                    s.name = names[j]
+                named[label] = names[j]
+                continue
+        unknown[label] = segs
+    return named, unknown
+
+
 def cluster_unknown(segs: list[Seg], *, threshold: float = 0.55) -> dict[str, list[Seg]]:
     """Agglomerative (average-linkage) cosine clustering of unnamed segments into distinct voices."""
     unknown = [s for s in segs if s.name is None]

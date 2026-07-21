@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from .. import config as cfg
 from ..guards import require_configured
 from ..meeting.pipeline import discover_audio
 
@@ -26,10 +27,8 @@ def _modules():
     return embed, identify, models, store, vad
 
 
-def _engine(embed, models, vad):
-    epath = models.ensure("embedding", log=console.print)
-    vpath = models.ensure("vad", log=console.print)
-    return embed.Embedder(epath), vad.Segmenter(vpath)
+def _embedder(embed, models):
+    return embed.Embedder(models.ensure("embedding", log=console.print))
 
 
 def _roster_note(names) -> str:
@@ -48,24 +47,84 @@ def _roster_note(names) -> str:
 MIN_CLUSTER_SEC = 6.0
 
 
+def _select_backend(config) -> str:
+    """Pick the speaker-separation backend: explicit config, or 'auto' — pyannote when a Hugging
+    Face token + install are present, else the built-in torch-free engine."""
+    backend = config.get("diarize", {}).get("backend", "auto")
+    if backend in ("pyannote", "onnx"):
+        return backend
+    from ..speaker import diarize
+
+    return "pyannote" if (cfg.get_secret("huggingface") and diarize.available()) else "onnx"
+
+
+def _big_clusters(raw: dict) -> dict:
+    """Drop one-off / cross-talk voices and relabel the rest 'Voice N' by total speaking time."""
+    big = [m for m in raw.values() if sum(s.end - s.start for s in m) >= MIN_CLUSTER_SEC]
+    big.sort(key=lambda m: sum(s.end - s.start for s in m), reverse=True)
+    return {f"Voice {i + 1}": m for i, m in enumerate(big)}
+
+
+def _gate_help() -> None:
+    from ..speaker import hf
+
+    console.print(
+        "[yellow]pyannote model access needed[/] (free, one-time). Using the built-in engine for now.\n"
+        f"  1. Create a token: {hf.TOKENS_URL}\n"
+        f"  2. Accept the terms: {hf.ACCEPT_URL}\n"
+        "  3. Re-run [bold]wcfi setup[/] to store the token (or set HF_TOKEN)."
+    )
+
+
+def _diarize_pyannote(audio_files, embedder, identify, voiceprints, *, on_progress, threshold):
+    """Returns (present:set, clusters:dict) via pyannote, or None to fall back to the onnx engine."""
+    from ..speaker import diarize, hf
+
+    if not diarize.available():
+        console.print('[yellow]pyannote not installed[/] — using built-in engine (pip install -e ".[diarize]").')
+        return None
+    try:
+        pipeline = diarize.load_pipeline(cfg.get_secret("huggingface"))
+    except hf.GatedModelError:
+        _gate_help()
+        return None
+    except Exception as exc:  # noqa: BLE001 - any load failure should degrade, not crash
+        console.print(f"[yellow]pyannote failed to load[/] ({exc}); using built-in engine.")
+        return None
+    console.print("  separating speakers with pyannote (community-1)…")
+    groups = diarize.diarize(audio_files, embedder, pipeline, on_progress=on_progress)
+    named, unknown = identify.match_clusters(groups, voiceprints, threshold=threshold)
+    return set(named.values()), _big_clusters(unknown)
+
+
 def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: float = 0.5):
     """Analyze audio → match to store → cluster + annotate unknowns. Returns (present, newly_saved)."""
     embed, identify, models, store, vad = _modules()
     console.print("  loading speaker models (first run downloads them)…")
-    embedder, segmenter = _engine(embed, models, vad)
-    segs = identify.analyze(audio_files, embedder, segmenter, on_progress=on_progress)
+    embedder = _embedder(embed, models)
     voiceprints = store.load()
-    identify.match(segs, voiceprints, threshold=threshold)
-    present = {s.name for s in segs if s.name}
+    backend = _select_backend(cfg.load_config())
+
+    present: set[str] = set()
+    clusters: dict = {}
+    if backend == "pyannote":
+        got = _diarize_pyannote(
+            audio_files, embedder, identify, voiceprints, on_progress=on_progress, threshold=threshold
+        )
+        if got is None:
+            backend = "onnx"  # graceful fallback
+        else:
+            present, clusters = got
+    if backend == "onnx":
+        segmenter = vad.Segmenter(models.ensure("vad", log=console.print))
+        segs = identify.analyze(audio_files, embedder, segmenter, on_progress=on_progress)
+        identify.match(segs, voiceprints, threshold=threshold)
+        present = {s.name for s in segs if s.name}
+        unknown = [s for s in segs if s.name is None]
+        clusters = _big_clusters(identify.cluster_unknown(unknown, threshold=threshold)) if unknown else {}
+
     newly: dict[str, int] = {}
-    unknown = [s for s in segs if s.name is None]
-    if annotate and unknown:
-        raw = identify.cluster_unknown(unknown, threshold=threshold)
-        big = [(members) for members in raw.values() if sum(s.end - s.start for s in members) >= MIN_CLUSTER_SEC]
-        big.sort(key=lambda m: sum(s.end - s.start for s in m), reverse=True)
-        clusters = {f"Voice {i + 1}": members for i, members in enumerate(big)}
-        if not clusters:
-            return present, newly
+    if annotate and clusters:
         console.print(f"  {len(clusters)} distinct voice(s) to name; preparing clips…")
         voices = identify.prepare_annotation(clusters, Path(work_dir), embedder)
         from ..web import run_annotator

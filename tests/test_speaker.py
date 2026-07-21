@@ -35,6 +35,62 @@ def test_match_labels_known_and_leaves_unknown():
     assert segs[2].name is None and segs[3].name is None  # Bob not registered
 
 
+def test_match_clusters_splits_known_and_unknown():
+    a = np.array([1, 0, 0], np.float32)
+    b = np.array([0, 1, 0], np.float32)
+    clusters = {"Voice 1": [_seg(a), _seg(a * 0.9 + b * 0.1)], "Voice 2": [_seg(b), _seg(b * 0.95)]}
+    named, unknown = identify.match_clusters(clusters, {"Alice": a}, threshold=0.7)
+    assert named == {"Voice 1": "Alice"}
+    assert list(unknown) == ["Voice 2"]
+    assert all(s.name == "Alice" for s in clusters["Voice 1"])  # named segs are tagged
+
+
+def test_merge_across_files_merges_same_voice_only_across_files():
+    from wcfi_tools.speaker import diarize
+
+    a = np.array([1, 0, 0], np.float32)
+    b = np.array([0, 1, 0], np.float32)
+    # file 0 has voices a and b; file 1 has voice a again (independent pyannote labels)
+    per_file = [(0, [_seg(a)]), (0, [_seg(b)]), (1, [_seg(a * 0.98)])]
+    groups = diarize.merge_across_files(per_file, threshold=0.7)
+    sizes = sorted(len(g) for g in groups)
+    assert sizes == [1, 2]  # the two 'a' groups (different files) merged; 'b' stayed separate
+
+
+def test_diarize_available_is_bool_without_pyannote():
+    from wcfi_tools.speaker import diarize
+
+    assert isinstance(diarize.available(), bool)  # importing the backend never requires pyannote
+
+
+def test_hf_check_access_no_token():
+    from wcfi_tools.speaker import hf
+
+    assert hf.check_access(None) == ("no_token", "")
+    assert hf.check_access("") == ("no_token", "")
+
+
+def test_hf_check_access_gated(monkeypatch):
+    import urllib.error
+
+    from wcfi_tools.speaker import hf
+
+    def boom(url, token, timeout=15.0):
+        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(hf, "_get", boom)
+    monkeypatch.setattr(hf, "whoami", lambda token: "danzel")  # token is valid, so it's the gate
+    status, _ = hf.check_access("tok")
+    assert status == "gated"
+
+
+def test_config_exposes_hf_token_and_diarize_backend():
+    from wcfi_tools import config as cfg
+
+    assert cfg.SECRET_ENV_VARS["huggingface"] == "HF_TOKEN"
+    assert cfg.DEFAULT_CONFIG["diarize"]["backend"] == "auto"
+
+
 def test_cluster_unknown_groups_same_voice():
     a = np.array([1, 0, 0], np.float32)
     b = np.array([0, 1, 0], np.float32)
