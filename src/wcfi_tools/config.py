@@ -22,7 +22,6 @@ KEYRING_SERVICE = "wcfi"
 SECRET_ENV_VARS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
-    "huggingface": "HF_TOKEN",  # optional: enables the pyannote speaker-separation backend
 }
 
 DEFAULT_CONFIG: dict[str, dict[str, str]] = {
@@ -32,9 +31,6 @@ DEFAULT_CONFIG: dict[str, dict[str, str]] = {
         "anthropic_summary": "claude-sonnet-5",
         "transcribe": "gpt-4o-transcribe",
     },
-    # backend for speaker separation: "auto" (pyannote if a HF token + install are present, else the
-    # built-in torch-free engine), "pyannote", or "onnx".
-    "diarize": {"backend": "auto"},
 }
 
 

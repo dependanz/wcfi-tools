@@ -1,9 +1,9 @@
-"""pyannote diarization backend.
+"""Speaker diarization via sherpa-onnx (offline, non-gated, torch-free).
 
-pyannote answers *who spoke when* (segmentation + overlap-aware clustering — the hard part that the
-built-in engine does poorly). We then embed each speaker turn with the same torch-free TitaNet
-embedder used everywhere else, so the voiceprint store stays backend-independent and existing
-enrollments keep working. pyannote is imported lazily so the package still runs without it.
+sherpa-onnx answers *who spoke when* using the pyannote segmentation model as ONNX + speaker
+embeddings + clustering — no account, token, or gated form; the models auto-download from k2-fsa's
+public GitHub releases. We then re-embed each speaker turn with the same TitaNet embedder used for
+enrollment, so the voiceprint store stays independent and registered speakers keep matching.
 """
 
 from __future__ import annotations
@@ -12,56 +12,50 @@ from pathlib import Path
 
 import numpy as np
 
+from . import models
 from .audio import decode
-from .hf import MODEL, GatedModelError
 from .identify import Seg
 
 SR = 16000
-_GATE_HINTS = ("gated", "401", "403", "restricted", "awaiting", "authorized", "unauthorized", "terms", "agree")
 
 
 def available() -> bool:
-    """True if pyannote.audio can be imported."""
+    """True if sherpa-onnx (with the diarization API) can be imported."""
     try:
-        import pyannote.audio  # noqa: F401
+        import sherpa_onnx  # noqa: F401
     except Exception:  # noqa: BLE001 - not installed / broken install
         return False
     return True
 
 
-def load_pipeline(token: str | None, model: str = MODEL):
-    """Load the pyannote pipeline, translating auth/gate failures into GatedModelError."""
-    try:
-        import torch
-        from pyannote.audio import Pipeline
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("pyannote.audio is not importable — reinstall: pip install -e .") from exc
-    try:
-        pipe = Pipeline.from_pretrained(model, token=token)
-    except Exception as exc:  # noqa: BLE001 - normalize the many auth/gate error types
-        if any(h in str(exc).lower() for h in _GATE_HINTS):
-            raise GatedModelError(str(exc)) from exc
-        raise
-    if pipe is None:  # some versions return None instead of raising when the gate isn't accepted
-        raise GatedModelError(f"Could not load {model}: check your Hugging Face token and accept the model terms.")
-    if torch.cuda.is_available():
-        pipe.to(torch.device("cuda"))
-    return pipe
+def load_diarizer(*, threshold: float = 0.5, num_speakers: int = -1, log=print):
+    """Build a sherpa-onnx OfflineSpeakerDiarization (pyannote segmentation + TitaNet + clustering).
+
+    ``num_speakers`` < 0 lets clustering estimate the count using ``threshold`` (higher = more,
+    finer-grained speakers); set it to a positive integer if the count is known.
+    """
+    import sherpa_onnx as so
+
+    seg = models.ensure("segmentation", log=log)
+    emb = models.ensure("embedding", log=log)
+    config = so.OfflineSpeakerDiarizationConfig(
+        segmentation=so.OfflineSpeakerSegmentationModelConfig(
+            pyannote=so.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(seg)),
+        ),
+        embedding=so.SpeakerEmbeddingExtractorConfig(model=str(emb)),
+        clustering=so.FastClusteringConfig(num_clusters=num_speakers, threshold=threshold),
+        min_duration_on=0.3,
+        min_duration_off=0.5,
+    )
+    if not config.validate():
+        raise RuntimeError("sherpa-onnx diarization config failed validation (check the model files).")
+    return so.OfflineSpeakerDiarization(config)
 
 
-def _turns(pipeline, samples: np.ndarray):
-    """Yield (start_s, end_s, speaker_label) for one waveform (handles pyannote 3.x/4.x outputs)."""
-    import torch
-
-    wav = {"waveform": torch.from_numpy(np.ascontiguousarray(samples)).unsqueeze(0), "sample_rate": SR}
-    out = pipeline(wav)
-    diar = getattr(out, "speaker_diarization", out)
-    if hasattr(diar, "itertracks"):
-        for turn, _track, speaker in diar.itertracks(yield_label=True):
-            yield float(turn.start), float(turn.end), str(speaker)
-    else:  # pragma: no cover - defensive for future output shapes
-        for turn, speaker in diar:
-            yield float(turn.start), float(turn.end), str(speaker)
+def _segments(diarizer, samples: np.ndarray):
+    """Yield (start_s, end_s, speaker_index) for one 16 kHz float32 waveform."""
+    for r in diarizer.process(samples).sort_by_start_time():
+        yield float(r.start), float(r.end), int(r.speaker)
 
 
 def _centroid(embs: list[np.ndarray]) -> np.ndarray:
@@ -70,15 +64,15 @@ def _centroid(embs: list[np.ndarray]) -> np.ndarray:
     return c / n if n else c
 
 
-def diarize(audio_files, embedder, pipeline, *, min_sec: float = 1.0, on_progress=None) -> dict[str, list[Seg]]:
-    """Run pyannote per file, embed each turn with TitaNet, return ``{"Voice N": [Seg, ...]}``."""
-    per_file: list[tuple[int, list[Seg]]] = []  # one entry per (file, pyannote-speaker)
+def diarize(audio_files, embedder, diarizer, *, min_sec: float = 1.0, on_progress=None) -> dict[str, list[Seg]]:
+    """Diarize each file, embed every turn with TitaNet, return ``{"Voice N": [Seg, ...]}``."""
+    per_file: list[tuple[int, list[Seg]]] = []  # one entry per (file, sherpa-speaker)
     for fi, audio in enumerate(audio_files):
         if on_progress:
             on_progress("diarize", fi + 1, len(audio_files))
         samples = decode(Path(audio))
-        by_spk: dict[str, list[Seg]] = {}
-        for start, end, spk in _turns(pipeline, samples):
+        by_spk: dict[int, list[Seg]] = {}
+        for start, end, spk in _segments(diarizer, samples):
             if end - start < min_sec:
                 continue
             chunk = samples[int(start * SR) : int(end * SR)]
@@ -92,8 +86,8 @@ def diarize(audio_files, embedder, pipeline, *, min_sec: float = 1.0, on_progres
 
 
 def merge_across_files(per_file: list[tuple[int, list[Seg]]], *, threshold: float = 0.55) -> list[list[Seg]]:
-    """Merge same-speaker groups that pyannote labeled independently in different files. Groups from
-    the *same* file are never merged (pyannote already separated those)."""
+    """Merge same-speaker groups labeled independently in different files. Groups from the *same*
+    file are never merged (the diarizer already separated those)."""
     files = [fi for fi, _ in per_file]
     segs = [g for _, g in per_file]
     cents = [_centroid([x.emb for x in g]) for g in segs]

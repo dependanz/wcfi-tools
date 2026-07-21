@@ -1,18 +1,13 @@
-"""Tie it together: segment a meeting's audio, embed, match to voiceprints, cluster the rest."""
+"""Match diarized speaker clusters to registered voiceprints, and prep the annotator clips."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-from .audio import decode, normalize, write_wav
-from .embed import Embedder
-from .vad import Segmenter
-
-Progress = Callable[[str, int, int], None]
+from .audio import normalize, write_wav
 
 
 @dataclass
@@ -25,45 +20,11 @@ class Seg:
     name: str | None = None
 
 
-def analyze(
-    audio_files: list[Path],
-    embedder: Embedder,
-    segmenter: Segmenter,
-    *,
-    min_sec: float = 1.2,
-    on_progress: Progress | None = None,
-) -> list[Seg]:
-    """VAD + embed every speech segment across the meeting's audio."""
-    segs: list[Seg] = []
-    for idx, audio in enumerate(audio_files, 1):
-        if on_progress:
-            on_progress("listen", idx, len(audio_files))
-        samples = decode(Path(audio))
-        for sp in segmenter.segments(samples):
-            if sp.end - sp.start < min_sec:
-                continue
-            segs.append(Seg(Path(audio), sp.start, sp.end, sp.samples, embedder.embed(sp.samples)))
-    return segs
-
-
-def match(segs: list[Seg], voiceprints: dict[str, np.ndarray], *, threshold: float = 0.5) -> None:
-    """Label each segment with the nearest registered speaker (or leave None)."""
-    names = list(voiceprints)
-    mat = np.stack([voiceprints[n] for n in names]) if names else None
-    for s in segs:
-        if mat is None:
-            s.name = None
-            continue
-        sims = mat @ s.emb
-        j = int(np.argmax(sims))
-        s.name = names[j] if float(sims[j]) >= threshold else None
-
-
 def match_clusters(
     clusters: dict[str, list[Seg]], voiceprints: dict[str, np.ndarray], *, threshold: float = 0.5
 ) -> tuple[dict[str, str], dict[str, list[Seg]]]:
-    """Assign each *whole* cluster to the nearest registered speaker by centroid similarity (used by
-    the pyannote backend, which already groups turns by speaker). Returns
+    """Assign each *whole* cluster to the nearest registered speaker by centroid similarity (used
+    after diarization, which already groups turns by speaker). Returns
     ``(named={label: name}, unknown={label: [Seg]})``; named clusters' segments get ``.name`` set."""
     names = list(voiceprints)
     mat = np.stack([voiceprints[n] for n in names]) if names else None
@@ -82,31 +43,6 @@ def match_clusters(
                 continue
         unknown[label] = segs
     return named, unknown
-
-
-def cluster_unknown(segs: list[Seg], *, threshold: float = 0.55) -> dict[str, list[Seg]]:
-    """Agglomerative (average-linkage) cosine clustering of unnamed segments into distinct voices."""
-    unknown = [s for s in segs if s.name is None]
-    n = len(unknown)
-    if n == 0:
-        return {}
-    emb = np.stack([s.emb for s in unknown])
-    sim = emb @ emb.T  # cosine, embeddings are unit-norm
-    groups: list[list[int]] = [[i] for i in range(n)]
-    while len(groups) > 1:
-        best, pair = -1.0, None
-        for i in range(len(groups)):
-            for j in range(i + 1, len(groups)):
-                s = float(sim[np.ix_(groups[i], groups[j])].mean())
-                if s > best:
-                    best, pair = s, (i, j)
-        if pair is None or best < threshold:
-            break
-        i, j = pair
-        groups[i] += groups[j]
-        del groups[j]
-    groups.sort(key=lambda g: sum(unknown[k].end - unknown[k].start for k in g), reverse=True)
-    return {f"Voice {c + 1}": [unknown[k] for k in g] for c, g in enumerate(groups)}
 
 
 # A shown clip must have at least one window this similar to the voice's centroid, otherwise its

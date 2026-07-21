@@ -26,15 +26,6 @@ def test_store_roundtrip(monkeypatch, tmp_path):
     assert store.remove("Joy Rimundo") is False
 
 
-def test_match_labels_known_and_leaves_unknown():
-    a = np.array([1, 0, 0], np.float32)
-    b = np.array([0, 1, 0], np.float32)
-    segs = [_seg(a), _seg(a * 0.9 + b * 0.1), _seg(b), _seg(b * 0.95 + a * 0.05)]
-    identify.match(segs, {"Alice": a}, threshold=0.7)
-    assert segs[0].name == "Alice" and segs[1].name == "Alice"
-    assert segs[2].name is None and segs[3].name is None  # Bob not registered
-
-
 def test_match_clusters_splits_known_and_unknown():
     a = np.array([1, 0, 0], np.float32)
     b = np.array([0, 1, 0], np.float32)
@@ -50,111 +41,20 @@ def test_merge_across_files_merges_same_voice_only_across_files():
 
     a = np.array([1, 0, 0], np.float32)
     b = np.array([0, 1, 0], np.float32)
-    # file 0 has voices a and b; file 1 has voice a again (independent pyannote labels)
+    # file 0 has voices a and b; file 1 has voice a again (independent per-file speaker indices)
     per_file = [(0, [_seg(a)]), (0, [_seg(b)]), (1, [_seg(a * 0.98)])]
     groups = diarize.merge_across_files(per_file, threshold=0.7)
     sizes = sorted(len(g) for g in groups)
     assert sizes == [1, 2]  # the two 'a' groups (different files) merged; 'b' stayed separate
 
 
-def test_diarize_available_is_bool_without_pyannote():
-    from wcfi_tools.speaker import diarize
+def test_diarize_module_imports_and_segmentation_model_registered():
+    from wcfi_tools.speaker import diarize, models
 
-    assert isinstance(diarize.available(), bool)  # importing the backend never requires pyannote
-
-
-def test_hf_check_access_no_token():
-    from wcfi_tools.speaker import hf
-
-    assert hf.check_access(None) == ("no_token", "")
-    assert hf.check_access("") == ("no_token", "")
-
-
-def test_hf_check_access_gated(monkeypatch):
-    import urllib.error
-
-    from wcfi_tools.speaker import hf
-
-    def boom(url, token, timeout=15.0):
-        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, None)
-
-    monkeypatch.setattr(hf, "_get", boom)
-    monkeypatch.setattr(hf, "whoami", lambda token: "danzel")  # token is valid, so it's the gate
-    status, _ = hf.check_access("tok")
-    assert status == "gated"
-
-
-def test_hf_get_retries_transient_then_succeeds(monkeypatch):
-    from wcfi_tools.speaker import hf
-
-    calls = {"n": 0}
-
-    class _Resp:
-        pass
-
-    def flaky(req, timeout=None):
-        calls["n"] += 1
-        if calls["n"] < 3:
-            raise ConnectionResetError("forcibly closed")
-        return _Resp()
-
-    monkeypatch.setattr(hf.urllib.request, "urlopen", flaky)
-    monkeypatch.setattr(hf.time, "sleep", lambda *_: None)
-    assert isinstance(hf._get("https://huggingface.co/x", None), _Resp)
-    assert calls["n"] == 3  # retried past the two resets
-
-
-def test_hf_get_does_not_retry_http_error(monkeypatch):
-    import urllib.error
-
-    import pytest
-
-    from wcfi_tools.speaker import hf
-
-    calls = {"n": 0}
-
-    def http401(req, timeout=None):
-        calls["n"] += 1
-        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
-
-    monkeypatch.setattr(hf.urllib.request, "urlopen", http401)
-    monkeypatch.setattr(hf.time, "sleep", lambda *_: None)
-    with pytest.raises(urllib.error.HTTPError):
-        hf._get("https://huggingface.co/x", "tok")
-    assert calls["n"] == 1  # a real HTTP status is definitive — not retried
-
-
-def test_hf_reachable_distinguishes_network_from_auth(monkeypatch):
-    import urllib.error
-
-    from wcfi_tools.speaker import hf
-
-    def http401(url, token, timeout=20.0):
-        raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
-
-    def reset(url, token, timeout=20.0):
-        raise ConnectionResetError("forcibly closed")
-
-    monkeypatch.setattr(hf, "_get", http401)
-    assert hf.reachable() is True  # 401 means we reached HF
-    monkeypatch.setattr(hf, "_get", reset)
-    assert hf.reachable() is False  # network reset means we didn't
-
-
-def test_config_exposes_hf_token_and_diarize_backend():
-    from wcfi_tools import config as cfg
-
-    assert cfg.SECRET_ENV_VARS["huggingface"] == "HF_TOKEN"
-    assert cfg.DEFAULT_CONFIG["diarize"]["backend"] == "auto"
-
-
-def test_cluster_unknown_groups_same_voice():
-    a = np.array([1, 0, 0], np.float32)
-    b = np.array([0, 1, 0], np.float32)
-    segs = [_seg(a), _seg(b), _seg(b * 0.97 + a * 0.03), _seg(b * 0.95)]  # 3 of "b", 1 of "a"
-    clusters = identify.cluster_unknown(segs, threshold=0.7)
-    sizes = sorted(len(m) for m in clusters.values())
-    assert sizes == [1, 3]  # one voice with 3 segments, one with 1
+    assert isinstance(diarize.available(), bool)
+    seg = models.SPEC["segmentation"]
+    assert seg["archive"] == "tar.bz2" and seg["path"].endswith("model.onnx")
+    assert seg["url"].startswith("https://github.com/k2-fsa/sherpa-onnx/releases/")
 
 
 def test_annotator_app(tmp_path):

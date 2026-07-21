@@ -23,12 +23,10 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "numpy>=1.24",
-    # Speaker identification (torch-free ONNX): silero VAD + speaker embeddings via sherpa-onnx;
-    # models auto-download from public (non-gated) URLs on first use.
-    "sherpa-onnx>=1.10",
-    # Higher-accuracy speaker separation via pyannote (pulls in PyTorch). Its model is gated —
-    # free, one-time Hugging Face access, configured through `wcfi setup`.
-    "pyannote.audio>=4.0",
+    # Speaker separation + identification, torch-free via sherpa-onnx (onnxruntime): pyannote
+    # segmentation + speaker embeddings + clustering. Models auto-download from public (non-gated)
+    # URLs on first use — no account, token, or gated form.
+    "sherpa-onnx>=1.12",
 ]
 
 [project.optional-dependencies]

@@ -12,27 +12,19 @@ First tools:
 
 ## Install
 
-One command installs everything — CLI, summarization, and both speaker-separation engines:
+One command installs everything — CLI, summarization, and speaker separation:
 
 ```bash
 pip install -e .          # editable; add ".[dev]" for the test/lint tools
 ```
 
-This pulls in **PyTorch** (for the pyannote backend, ~2 GB). You also need **ffmpeg** and
-**ffprobe** on your `PATH` (used to chunk audio):
+It's **torch-free**: speaker separation runs on `sherpa-onnx` (ONNX Runtime), and its models
+auto-download from public URLs on first use — **no account, token, or gated model**. You also need
+**ffmpeg** and **ffprobe** on your `PATH` (used to chunk audio):
 
 - Windows: `choco install ffmpeg` or `winget install Gyan.FFmpeg`
 - macOS: `brew install ffmpeg`
 - Debian/Ubuntu: `sudo apt install ffmpeg`
-
-**Speaker separation** comes with two engines and nothing extra to install:
-
-- **Built-in (default)** — torch-free ONNX (silero VAD + `sherpa-onnx` embeddings); models
-  auto-download from public URLs, **no account, token, or gated model**.
-- **pyannote (opt-in via `wcfi setup`)** — [`pyannote/speaker-diarization-community-1`](https://huggingface.co/pyannote/speaker-diarization-community-1)
-  (CC-BY-4.0) for sharper separation on messy room audio. Its model is **free but gated**; setup
-  walks you through a one-time Hugging Face token + accepting the terms. Enrollment/voiceprints
-  still use the torch-free embedder, so your registered speakers keep working unchanged.
 
 ## Setup
 
@@ -86,15 +78,10 @@ wcfi meeting speakers remove "<name>"             # forget someone
 
 Then `summarize --identify` (or answer its prompt) finds each meeting's voices, matches them to
 your registered speakers, and asks you to name only the **new** ones — names flow into
-**Attendance** and motion movers/seconders. Under the hood: silero VAD → ONNX speaker embeddings
-(sherpa-onnx) → nearest registered voiceprint (low-confidence → *Unsure*). Voiceprints never leave
-your machine.
-
-**Separation backend.** By default (`diarize.backend = "auto"`) wcfi uses pyannote when a Hugging
-Face token is configured, otherwise the built-in torch-free engine. Force it either way with
-`backend = "pyannote"` / `"onnx"` under `[diarize]` in the config, and check which is active with
-`wcfi setup --check` (the `diarizer` line). If pyannote is selected but its gate isn't accepted,
-wcfi prints how to fix it and falls back automatically.
+**Attendance** and motion movers/seconders. Under the hood: `sherpa-onnx` offline diarization
+(pyannote **segmentation** model as ONNX + speaker embeddings + clustering) → each speaker turn
+re-embedded and matched to the nearest registered voiceprint (low-confidence → *Unsure*). All ONNX,
+no torch and no gated models; voiceprints never leave your machine.
 
 ## Configuration & secrets
 
@@ -116,9 +103,9 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 
 ## Roadmap
 
-- **Speaker identification** — ✅ enrollment-based & torch-free (sherpa-onnx VAD + ONNX embeddings),
-  with an optional ✅ **pyannote** backend (opt-in via `wcfi setup`) for much better separation. Next:
-  word-level "who said what" in the transcript (not just the attendee list).
+- **Speaker identification** — ✅ enrollment-based & torch-free: sherpa-onnx offline diarization
+  (pyannote segmentation as ONNX + embeddings + clustering), non-gated. Next: word-level "who said
+  what" in the transcript (not just the attendee list).
 - **`--transcript`** — bring your own transcript (Otter / `.vtt` / `.srt`) and skip transcription.
 - Longer term, the same UI-agnostic core (incl. the annotator) can back a hosted web/desktop app.
 
