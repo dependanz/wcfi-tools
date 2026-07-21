@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .audio import decode, write_wav
+from .audio import decode, normalize, write_wav
 from .embed import Embedder
 from .vad import Segmenter
 
@@ -84,11 +84,24 @@ def cluster_unknown(segs: list[Seg], *, threshold: float = 0.55) -> dict[str, li
     return {f"Voice {c + 1}": [unknown[k] for k in g] for c, g in enumerate(groups)}
 
 
+# A shown clip must have at least one window this similar to the voice's centroid, otherwise its
+# spectrogram would carry no highlight and give the annotator nothing to go on (the "no green" case).
+GREEN_MIN = 0.42
+
+
 def prepare_annotation(
-    clusters: dict[str, list[Seg]], work_dir: Path, embedder, *, per: int = 2, clip_sec: float = 4.0
+    clusters: dict[str, list[Seg]],
+    work_dir: Path,
+    embedder,
+    *,
+    per: int = 2,
+    clip_sec: float = 4.0,
+    candidates: int = 4,
 ) -> list[dict]:
-    """Pick the most-representative clips per voice (closest to its centroid, trimmed short), cut
-    wavs, and compute spectrogram + target-highlight data. Returns a list of
+    """Pick clips that actually contain each voice, cut loudness-normalized wavs, and compute
+    spectrogram + target-highlight data. For each voice we score several candidates (closest to the
+    centroid) by how strongly the voice shows up window-by-window, keep those with a real highlight,
+    and drop clips that would render with no green. Returns a list of
     ``{label, seconds, clips: [{path, spec, scores, dur}]}``."""
     from . import viz
 
@@ -99,16 +112,23 @@ def prepare_annotation(
     for label, members in clusters.items():
         centroid = sum(m.emb for m in members)
         centroid = centroid / (np.linalg.norm(centroid) or 1.0)
-        ranked = sorted(members, key=lambda m: float(m.emb @ centroid), reverse=True)[:per]
-        clips = []
-        for k, m in enumerate(ranked):
+        ranked = sorted(members, key=lambda m: float(m.emb @ centroid), reverse=True)
+        scored = []  # (peak_window_score, viz_dict, samples)
+        for m in ranked[: max(per, candidates)]:
             samp = m.samples
             if len(samp) > n:  # middle clip_sec seconds
                 start = (len(samp) - n) // 2
                 samp = samp[start : start + n]
+            samp = normalize(samp)
+            v = viz.clip_viz(samp, centroid, embedder)
+            peak = max((s["score"] for s in v["scores"]), default=0.0)
+            scored.append((peak, v, samp))
+        scored.sort(key=lambda t: t[0], reverse=True)
+        keep = [t for t in scored if t[0] >= GREEN_MIN][:per] or scored[:1]  # always show one
+        clips = []
+        for k, (_peak, v, samp) in enumerate(keep):
             path = snip_dir / f"{label.replace(' ', '_')}_{k}.wav"
             write_wav(path, samp)
-            v = viz.clip_viz(samp, centroid, embedder)
             clips.append({"path": path, "spec": v["spec"], "scores": v["scores"], "dur": v["dur"]})
         voices.append(
             {"label": label, "seconds": round(sum(m.end - m.start for m in members)), "clips": clips}

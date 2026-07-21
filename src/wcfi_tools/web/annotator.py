@@ -143,6 +143,10 @@ _PAGE = """<!doctype html>
  .seek{flex:1;height:7px;background:#2a2e37;border-radius:4px;position:relative;cursor:pointer}
  .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--accent);border-radius:4px}
  .tm{color:var(--muted);font-size:.78rem;font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+ .spk{color:var(--muted);font-size:1rem;line-height:1;user-select:none}
+ .vol{width:72px;height:5px;-webkit-appearance:none;appearance:none;background:#2a2e37;border-radius:3px;cursor:pointer;outline:none}
+ .vol::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);cursor:pointer}
+ .vol::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:50%;background:var(--accent);cursor:pointer}
  .lbl{color:var(--green);font-size:.72rem;margin:.25rem 0 0;letter-spacing:.02em}
  input#nm{width:100%;padding:.6rem;border-radius:8px;border:1px solid var(--line);background:#0f1115;color:#e8e8ea;font-size:.95rem;margin-top:.4rem}
  .btns{margin-top:.7rem;display:flex;justify-content:space-between;align-items:center}
@@ -185,14 +189,17 @@ function drawHl(cv, scores, dur){ const W=cv.width=Math.max(1,cv.clientWidth), H
   for(let x=0;x<W;x++){ const t=x/W*dur; let v=c[0].v;
     if(t>=c[c.length-1].t) v=c[c.length-1].v;
     else for(let j=0;j<c.length-1;j++){ if(t>=c[j].t&&t<=c[j+1].t){ const f=(t-c[j].t)/((c[j+1].t-c[j].t)||1); v=c[j].v+(c[j+1].v-c[j].v)*f; break; } }
-    const a=Math.max(0,Math.min(1,(v-0.35)/0.45)); g.fillStyle='rgba(93,220,120,'+a+')'; g.fillRect(x,0,1,H); } }
+    const a=Math.max(0,Math.min(1,(v-0.30)/0.40)); g.fillStyle='rgba(93,220,120,'+a+')'; g.fillRect(x,0,1,H); } }
 function makeClip(label,k){
   const wrap=el('div','clip'), sw=el('div','specwrap'), spec=el('canvas','spec'), ph=el('div','playhead'), hl=el('canvas','hl');
   sw.append(spec,ph);
   const player=el('div','player'), pp=el('button','pp'), seek=el('div','seek'), fill=el('div','fill'), tm=el('span','tm');
-  pp.textContent='▶'; seek.append(fill); tm.textContent='0:00 / 0:00'; player.append(pp,seek,tm);
+  const spk=el('span','spk'), vol=el('input','vol');
+  spk.textContent='🔊'; vol.type='range'; vol.min=0; vol.max=1; vol.step=0.05; vol.value=1; vol.title='Volume';
+  pp.textContent='▶'; seek.append(fill); tm.textContent='0:00 / 0:00'; player.append(pp,seek,tm,spk,vol);
   wrap.append(sw,hl,player);
-  const audio=new Audio(`/snippet?speaker=${encodeURIComponent(label)}&idx=${k}`); audio.preload='metadata';
+  const audio=new Audio(`/snippet?speaker=${encodeURIComponent(label)}&idx=${k}`); audio.preload='metadata'; audio.volume=1;
+  vol.oninput=()=>{ audio.volume=parseFloat(vol.value); spk.textContent=audio.volume==0?'🔇':(audio.volume<0.5?'🔉':'🔊'); };
   const redraw=d=>{drawSpec(spec,d.spec); drawHl(hl,d.scores,d.dur);};
   fetch(`/clip?speaker=${encodeURIComponent(label)}&idx=${k}`).then(r=>r.json()).then(d=>{ requestAnimationFrame(()=>redraw(d)); });
   pp.onclick=()=>{ document.querySelectorAll('audio').forEach(a=>{if(a!==audio)a.pause();}); if(audio.paused){audio.play();pp.textContent='⏸';}else{audio.pause();pp.textContent='▶';} };

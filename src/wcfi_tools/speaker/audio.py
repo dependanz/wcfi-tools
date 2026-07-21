@@ -23,6 +23,18 @@ def decode(path: Path, start: float = 0.0, dur: float | None = None) -> np.ndarr
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
 
+def normalize(samples: np.ndarray, peak: float = 0.95, pct: float = 99.0) -> np.ndarray:
+    """Boost a quiet clip to a consistent loudness. Scales the 99th-percentile amplitude to
+    ``peak`` (robust to lone transients) and clips to [-1, 1]."""
+    x = np.asarray(samples, dtype=np.float32)
+    if not len(x):
+        return x
+    ref = float(np.percentile(np.abs(x), pct))
+    if ref < 1e-4:
+        ref = float(np.abs(x).max()) or 1.0
+    return np.clip(x * (peak / ref), -1.0, 1.0).astype(np.float32)
+
+
 def write_wav(path: Path, samples: np.ndarray, sr: int = SR) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
