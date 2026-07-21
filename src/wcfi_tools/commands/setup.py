@@ -98,8 +98,8 @@ def _setup_diarization(config: dict) -> None:
 
     console.print("\n[bold]Speaker separation[/] [dim](optional)[/]")
     console.print(
-        "  [dim]pyannote separates speakers far better than the built-in engine, but needs a free\n"
-        "  Hugging Face account + a one-time model-access click, and pulls in PyTorch.[/]"
+        "  [dim]pyannote separates speakers far better than the built-in engine (it ships with wcfi),\n"
+        "  but needs a free Hugging Face account + a one-time model-access click.[/]"
     )
     if not typer.confirm("  Enable pyannote speaker separation?", default=False):
         config.setdefault("diarize", {})["backend"] = "onnx"
@@ -123,7 +123,10 @@ def _setup_diarization(config: dict) -> None:
     console.print(f"  [green]OK[/] Hugging Face token ({who}).")
     _ensure_gate(token)
     config.setdefault("diarize", {})["backend"] = "pyannote"
-    console.print('  Install the engine when ready:  [bold]pip install -e ".[diarize]"[/]')
+    from ..speaker import diarize
+
+    if not diarize.available():
+        console.print("  [yellow]Note:[/] pyannote isn't importable — reinstall with [bold]pip install -e .[/]")
 
 
 def _check_ffmpeg() -> bool:

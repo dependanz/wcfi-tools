@@ -12,29 +12,27 @@ First tools:
 
 ## Install
 
+One command installs everything — CLI, summarization, and both speaker-separation engines:
+
 ```bash
-pipx install .           # from a clone, or:
-pip install -e ".[dev]"  # editable, for development
+pip install -e .          # editable; add ".[dev]" for the test/lint tools
 ```
 
-You also need **ffmpeg** and **ffprobe** on your `PATH` (used to chunk audio):
+This pulls in **PyTorch** (for the pyannote backend, ~2 GB). You also need **ffmpeg** and
+**ffprobe** on your `PATH` (used to chunk audio):
 
 - Windows: `choco install ffmpeg` or `winget install Gyan.FFmpeg`
 - macOS: `brew install ffmpeg`
 - Debian/Ubuntu: `sudo apt install ffmpeg`
 
-For **speaker identification** (optional), install the extra. It's **torch-free** (ONNX via
-`sherpa-onnx`); the models auto-download from public URLs — **no account, token, or gated model**:
+**Speaker separation** comes with two engines and nothing extra to install:
 
-```bash
-pip install ".[speaker]"
-```
-
-Want sharper speaker separation on messy room audio? Add the optional **pyannote** backend
-(`pip install ".[diarize]"`). It pulls in PyTorch and uses [`pyannote/speaker-diarization-community-1`](https://huggingface.co/pyannote/speaker-diarization-community-1)
-(CC-BY-4.0), which is a **free, one-time gated** model — `wcfi setup` walks you through creating a
-Hugging Face token and accepting the terms. Enrollment/voiceprints still use the torch-free embedder,
-so it's an upgrade to *who-spoke-when* only; your registered speakers keep working unchanged.
+- **Built-in (default)** — torch-free ONNX (silero VAD + `sherpa-onnx` embeddings); models
+  auto-download from public URLs, **no account, token, or gated model**.
+- **pyannote (opt-in via `wcfi setup`)** — [`pyannote/speaker-diarization-community-1`](https://huggingface.co/pyannote/speaker-diarization-community-1)
+  (CC-BY-4.0) for sharper separation on messy room audio. Its model is **free but gated**; setup
+  walks you through a one-time Hugging Face token + accepting the terms. Enrollment/voiceprints
+  still use the torch-free embedder, so your registered speakers keep working unchanged.
 
 ## Setup
 
@@ -74,8 +72,8 @@ Outputs (written into the meeting folder):
 
 ### Speaker identification (optional)
 
-Put **names** on the voices. It's **enrollment-based**, so it stays accurate on long meetings and
-needs no accounts, tokens, or gated models — just `pip install ".[speaker]"`.
+Put **names** on the voices. It's **enrollment-based**, so it stays accurate on long meetings. The
+default engine needs no accounts, tokens, or gated models.
 
 Register your board's voices once (opens a local web page — play a clip, type who it is, or mark
 **Unsure**); the named voiceprints are saved on your machine:
@@ -92,11 +90,11 @@ your registered speakers, and asks you to name only the **new** ones — names f
 (sherpa-onnx) → nearest registered voiceprint (low-confidence → *Unsure*). Voiceprints never leave
 your machine.
 
-**Separation backend.** By default (`diarize.backend = "auto"`) wcfi uses pyannote when the
-`[diarize]` extra and a Hugging Face token are both present, otherwise the built-in torch-free
-engine. Force it either way with `backend = "pyannote"` / `"onnx"` under `[diarize]` in the config,
-and check which is active with `wcfi setup --check` (the `diarizer` line). If pyannote is selected
-but unavailable or its gate isn't accepted, wcfi prints how to fix it and falls back automatically.
+**Separation backend.** By default (`diarize.backend = "auto"`) wcfi uses pyannote when a Hugging
+Face token is configured, otherwise the built-in torch-free engine. Force it either way with
+`backend = "pyannote"` / `"onnx"` under `[diarize]` in the config, and check which is active with
+`wcfi setup --check` (the `diarizer` line). If pyannote is selected but its gate isn't accepted,
+wcfi prints how to fix it and falls back automatically.
 
 ## Configuration & secrets
 
@@ -119,7 +117,7 @@ The CLI is a thin shell; all logic lives in the importable core so other front-e
 ## Roadmap
 
 - **Speaker identification** — ✅ enrollment-based & torch-free (sherpa-onnx VAD + ONNX embeddings),
-  with an optional ✅ **pyannote** backend (`[diarize]`) for much better speaker separation. Next:
+  with an optional ✅ **pyannote** backend (opt-in via `wcfi setup`) for much better separation. Next:
   word-level "who said what" in the transcript (not just the attendee list).
 - **`--transcript`** — bring your own transcript (Otter / `.vtt` / `.srt`) and skip transcription.
 - Longer term, the same UI-agnostic core (incl. the annotator) can back a hosted web/desktop app.

@@ -35,7 +35,7 @@ def load_pipeline(token: str | None, model: str = MODEL):
         import torch
         from pyannote.audio import Pipeline
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError('pyannote.audio is not installed — pip install -e ".[diarize]"') from exc
+        raise RuntimeError("pyannote.audio is not importable — reinstall: pip install -e .") from exc
     try:
         pipe = Pipeline.from_pretrained(model, token=token)
     except Exception as exc:  # noqa: BLE001 - normalize the many auth/gate error types

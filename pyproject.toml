@@ -22,19 +22,17 @@ dependencies = [
     "tqdm>=4.66",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "numpy>=1.24",
+    # Speaker identification (torch-free ONNX): silero VAD + speaker embeddings via sherpa-onnx;
+    # models auto-download from public (non-gated) URLs on first use.
+    "sherpa-onnx>=1.10",
+    # Higher-accuracy speaker separation via pyannote (pulls in PyTorch). Its model is gated —
+    # free, one-time Hugging Face access, configured through `wcfi setup`.
+    "pyannote.audio>=4.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "numpy>=1.24"]
-# Speaker identification: torch-free ONNX (VAD + speaker embeddings via sherpa-onnx).
-# Models auto-download from public (non-gated) URLs on first use.
-#   pip install "wcfi-tools[speaker]"
-speaker = ["sherpa-onnx>=1.10", "numpy>=1.24"]
-# Higher-accuracy speaker separation via pyannote (pulls in PyTorch). Uses the built-in TitaNet
-# embedder for enrollment, so it also needs the `speaker` deps. The model is gated (free, one-time
-# Hugging Face access) — configure a token with `wcfi setup`.
-#   pip install "wcfi-tools[diarize]"
-diarize = ["sherpa-onnx>=1.10", "numpy>=1.24", "pyannote.audio>=4.0"]
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27"]
 
 [project.scripts]
 wcfi = "wcfi_tools.cli:app"

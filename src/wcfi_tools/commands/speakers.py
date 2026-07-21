@@ -18,10 +18,10 @@ console = Console()
 def _modules():
     try:
         from ..speaker import embed, identify, models, store, vad
-    except ImportError:
+    except ImportError as exc:
         console.print(
-            '[red]Speaker identification needs the optional extra[/] (torch-free). Install it, then '
-            'retry:\n  pip install -e ".\\[speaker]"'
+            f"[red]Speaker dependencies aren't importable[/] ({exc}). Reinstall wcfi-tools:\n"
+            "  pip install -e ."
         )
         raise typer.Exit(1) from None
     return embed, identify, models, store, vad
@@ -81,7 +81,7 @@ def _diarize_pyannote(audio_files, embedder, identify, voiceprints, *, on_progre
     from ..speaker import diarize, hf
 
     if not diarize.available():
-        console.print('[yellow]pyannote not installed[/] — using built-in engine (pip install -e ".[diarize]").')
+        console.print("[yellow]pyannote not importable[/] — using built-in engine (try: pip install -e .).")
         return None
     try:
         pipeline = diarize.load_pipeline(cfg.get_secret("huggingface"))
