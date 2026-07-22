@@ -52,9 +52,11 @@ def load_diarizer(*, threshold: float = 0.5, num_speakers: int = -1, log=print):
     return so.OfflineSpeakerDiarization(config)
 
 
-def _segments(diarizer, samples: np.ndarray):
-    """Yield (start_s, end_s, speaker_index) for one 16 kHz float32 waveform."""
-    for r in diarizer.process(samples).sort_by_start_time():
+def _segments(diarizer, samples: np.ndarray, callback=None):
+    """Yield (start_s, end_s, speaker_index) for one 16 kHz float32 waveform. ``callback(done,
+    total) -> int`` (return 0 to continue) reports chunk progress during processing."""
+    result = diarizer.process(samples, callback=callback) if callback else diarizer.process(samples)
+    for r in result.sort_by_start_time():
         yield float(r.start), float(r.end), int(r.speaker)
 
 
@@ -64,15 +66,18 @@ def _centroid(embs: list[np.ndarray]) -> np.ndarray:
     return c / n if n else c
 
 
-def diarize(audio_files, embedder, diarizer, *, min_sec: float = 1.0, on_progress=None) -> dict[str, list[Seg]]:
-    """Diarize each file, embed every turn with TitaNet, return ``{"Voice N": [Seg, ...]}``."""
+def diarize(
+    audio_files, embedder, diarizer, *, min_sec: float = 1.0, on_progress=None, on_chunk=None
+) -> dict[str, list[Seg]]:
+    """Diarize each file, embed every turn with TitaNet, return ``{"Voice N": [Seg, ...]}``.
+    ``on_chunk(done, total)`` (if given) is called during processing to report progress."""
     per_file: list[tuple[int, list[Seg]]] = []  # one entry per (file, sherpa-speaker)
     for fi, audio in enumerate(audio_files):
         if on_progress:
             on_progress("diarize", fi + 1, len(audio_files))
         samples = decode(Path(audio))
         by_spk: dict[int, list[Seg]] = {}
-        for start, end, spk in _segments(diarizer, samples):
+        for start, end, spk in _segments(diarizer, samples, on_chunk):
             if end - start < min_sec:
                 continue
             chunk = samples[int(start * SR) : int(end * SR)]

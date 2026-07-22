@@ -60,8 +60,13 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: 
     embedder = _embedder(embed, models)
     voiceprints = store.load()
     diarizer = diarize.load_diarizer(threshold=threshold, log=console.print)
-    console.print("  separating speakers…")
-    groups = diarize.diarize(audio_files, embedder, diarizer, on_progress=on_progress)
+
+    def _chunk(done: int, total: int) -> int:
+        print(f"\r  separating speakers… {done * 100 // max(total, 1)}%", end="", flush=True)
+        return 0
+
+    groups = diarize.diarize(audio_files, embedder, diarizer, on_progress=on_progress, on_chunk=_chunk)
+    print("\r  separating speakers… done.            ")
     named, unknown = identify.match_clusters(groups, voiceprints, threshold=threshold)
     present: set[str] = set(named.values())
     clusters = _big_clusters(unknown)
