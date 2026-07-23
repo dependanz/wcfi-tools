@@ -44,22 +44,30 @@ def _roster_note(names) -> str:
 # A real recurring speaker talks for at least this many seconds total; smaller clusters are
 # one-off blips / cross-talk and are dropped so there aren't dozens of "voices" to name.
 MIN_CLUSTER_SEC = 6.0
+# sherpa FastClustering merge threshold when the speaker count isn't given: HIGHER = fewer/coarser
+# voices. Tuned high for TitaNet embeddings, which otherwise over-split badly.
+CLUSTER_THRESHOLD = 0.85
+# cosine similarity for deciding a diarized cluster IS an already-registered speaker.
+MATCH_THRESHOLD = 0.5
 
 
-def _big_clusters(raw: dict) -> dict:
+def _big_clusters(raw: dict, *, min_sec: float = MIN_CLUSTER_SEC) -> dict:
     """Drop one-off / cross-talk voices and relabel the rest 'Voice N' by total speaking time."""
-    big = [m for m in raw.values() if sum(s.end - s.start for s in m) >= MIN_CLUSTER_SEC]
+    big = [m for m in raw.values() if sum(s.end - s.start for s in m) >= min_sec]
     big.sort(key=lambda m: sum(s.end - s.start for s in m), reverse=True)
     return {f"Voice {i + 1}": m for i, m in enumerate(big)}
 
 
-def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: float = 0.5):
-    """Diarize (sherpa-onnx) → match to store → annotate unknowns. Returns (present, newly_saved)."""
+def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, num_speakers: int = 0):
+    """Diarize (sherpa-onnx) → match to store → annotate unknowns. Returns (present, newly_saved).
+    ``num_speakers`` > 0 pins the count (use when attendance is known); 0 lets it auto-detect."""
     embed, identify, models, store, diarize = _modules()
     console.print("  loading speaker models (first run downloads them)…")
     embedder = _embedder(embed, models)
     voiceprints = store.load()
-    diarizer = diarize.load_diarizer(threshold=threshold, log=console.print)
+    diarizer = diarize.load_diarizer(
+        threshold=CLUSTER_THRESHOLD, num_speakers=(num_speakers or -1), log=console.print
+    )
 
     def _chunk(done: int, total: int) -> int:
         print(f"\r  separating speakers… {done * 100 // max(total, 1)}%", end="", flush=True)
@@ -67,9 +75,10 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: 
 
     groups = diarize.diarize(audio_files, embedder, diarizer, on_progress=on_progress, on_chunk=_chunk)
     print("\r  separating speakers… done.            ")
-    named, unknown = identify.match_clusters(groups, voiceprints, threshold=threshold)
+    named, unknown = identify.match_clusters(groups, voiceprints, threshold=MATCH_THRESHOLD)
     present: set[str] = set(named.values())
-    clusters = _big_clusters(unknown)
+    # if the count was pinned, trust it — show even briefly-heard people instead of dropping them
+    clusters = _big_clusters(unknown, min_sec=1.0 if num_speakers else MIN_CLUSTER_SEC)
 
     newly: dict[str, int] = {}
     if annotate and clusters:
@@ -90,9 +99,9 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, threshold: 
     return present, newly
 
 
-def identify_present(audio_files, work_dir, *, on_progress=None):
+def identify_present(audio_files, work_dir, *, on_progress=None, num_speakers: int = 0):
     """Used by `summarize --identify`: returns (roster dict, roster_note str)."""
-    present, newly = _run(audio_files, work_dir, annotate=True, on_progress=on_progress)
+    present, newly = _run(audio_files, work_dir, annotate=True, on_progress=on_progress, num_speakers=num_speakers)
     if newly:
         console.print("  [green]newly registered:[/] " + ", ".join(newly))
     roster = {name: "identified" for name in sorted(present)}
@@ -102,6 +111,9 @@ def identify_present(audio_files, work_dir, *, on_progress=None):
 @app.command("register")
 def register(
     folder: Path = typer.Argument(..., help="Meeting folder / audio to learn the distinct voices from"),
+    speakers: int = typer.Option(
+        0, "--speakers", "-n", help="How many people are present (0 = auto-detect). Set it when you know."
+    ),
 ) -> None:
     """Detect the distinct voices in a recording and name them (saves voiceprints for reuse)."""
     require_configured()
@@ -114,7 +126,7 @@ def register(
         console.print("[yellow]No audio files found in that folder.[/]")
         raise typer.Exit(1)
     console.print(f"Listening for distinct voices in [bold]{folder.name}[/]…")
-    _, newly = _run(audio, folder / "_work", annotate=True)
+    _, newly = _run(audio, folder / "_work", annotate=True, num_speakers=speakers)
     if newly:
         console.print("[green]Registered:[/] " + ", ".join(f"{n} ({c} clips)" for n, c in newly.items()))
     else:

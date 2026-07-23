@@ -65,6 +65,9 @@ def summarize(
     identify: Optional[bool] = typer.Option(
         None, "--identify/--no-identify", help="Identify speakers by name (prompts if unset).",
     ),
+    speakers_present: int = typer.Option(
+        0, "--speakers", "-n", help="How many people are present (0 = auto-detect). Improves identification.",
+    ),
 ) -> None:
     """Turn a folder of meeting audio into copy-able minutes artifacts."""
     require_configured()  # `wcfi setup` must be run first
@@ -90,7 +93,9 @@ def summarize(
     if _want_identify(identify):
         audio_files = discover_audio(folder)
         if audio_files:
-            roster, roster_note = speakers.identify_present(audio_files, folder / "_work")
+            roster, roster_note = speakers.identify_present(
+                audio_files, folder / "_work", num_speakers=speakers_present
+            )
         else:
             console.print("[yellow]No audio found to identify speakers from.[/]")
 

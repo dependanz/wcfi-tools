@@ -72,9 +72,13 @@ Register your board's voices once (opens a local web page — play a clip, type 
 
 ```bash
 wcfi meeting speakers register <meeting-folder>   # find + name the distinct voices
+wcfi meeting speakers register <folder> -n 6      # pin the count when you know who's present
 wcfi meeting speakers list                        # who's on file
 wcfi meeting speakers remove "<name>"             # forget someone
 ```
+
+`--speakers/-n` (also on `summarize`) pins how many people are present — recommended when you know
+the attendance, since it's more reliable than auto-detecting the count.
 
 Then `summarize --identify` (or answer its prompt) finds each meeting's voices, matches them to
 your registered speakers, and asks you to name only the **new** ones — names flow into
