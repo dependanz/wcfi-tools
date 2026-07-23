@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .audio import normalize, write_wav
+from .audio import decode, normalize, write_wav
 
 
 @dataclass
@@ -77,6 +77,8 @@ def prepare_annotation(
         scored = []  # (peak_window_score, viz_dict, samples)
         for m in ranked[: max(per, candidates)]:
             samp = m.samples
+            if samp is None or len(samp) == 0:  # diarization keeps no audio — re-decode the turn
+                samp = decode(m.audio, start=m.start, dur=max(0.2, m.end - m.start))
             if len(samp) > n:  # middle clip_sec seconds
                 start = (len(samp) - n) // 2
                 samp = samp[start : start + n]

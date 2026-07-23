@@ -36,16 +36,28 @@ def test_match_clusters_splits_known_and_unknown():
     assert all(s.name == "Alice" for s in clusters["Voice 1"])  # named segs are tagged
 
 
-def test_merge_across_files_merges_same_voice_only_across_files():
+def test_merge_units_merges_same_voice_only_across_windows():
     from wcfi_tools.speaker import diarize
 
     a = np.array([1, 0, 0], np.float32)
     b = np.array([0, 1, 0], np.float32)
-    # file 0 has voices a and b; file 1 has voice a again (independent per-file speaker indices)
-    per_file = [(0, [_seg(a)]), (0, [_seg(b)]), (1, [_seg(a * 0.98)])]
-    groups = diarize.merge_across_files(per_file, threshold=0.7)
+    # window 0 has voices a and b; window 1 has voice a again (independent per-window indices)
+    units = [(0, [_seg(a)]), (0, [_seg(b)]), (1, [_seg(a * 0.98)])]
+    groups = diarize.merge_units(units, threshold=0.7)
     sizes = sorted(len(g) for g in groups)
-    assert sizes == [1, 2]  # the two 'a' groups (different files) merged; 'b' stayed separate
+    assert sizes == [1, 2]  # the two 'a' groups (different windows) merged; 'b' stayed separate
+
+
+def test_merge_units_targets_speaker_count():
+    from wcfi_tools.speaker import diarize
+
+    a = np.array([1, 0, 0], np.float32)
+    b = np.array([0, 1, 0], np.float32)
+    c = np.array([0, 0, 1], np.float32)
+    # 4 groups across distinct windows; ask for exactly 2 → closest pair collapses
+    units = [(0, [_seg(a)]), (1, [_seg(a * 0.97)]), (2, [_seg(b)]), (3, [_seg(c)])]
+    groups = diarize.merge_units(units, num_speakers=2)
+    assert len(groups) == 2
 
 
 def test_diarize_module_imports_and_segmentation_model_registered():

@@ -23,6 +23,16 @@ def decode(path: Path, start: float = 0.0, dur: float | None = None) -> np.ndarr
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
 
+def duration(path: Path) -> float:
+    """Length of an audio file in seconds (via ffprobe)."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return float(out) if out else 0.0
+
+
 def normalize(samples: np.ndarray, peak: float = 0.95, pct: float = 99.0) -> np.ndarray:
     """Boost a quiet clip to a consistent loudness. Scales the 99th-percentile amplitude to
     ``peak`` (robust to lone transients) and clips to [-1, 1]."""
