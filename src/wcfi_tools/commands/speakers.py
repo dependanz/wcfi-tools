@@ -65,7 +65,11 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, num_speaker
     console.print("  loading speaker models (first run downloads them)…")
     embedder = _embedder(embed, models)
     voiceprints = store.load()
-    diarizer = diarize.load_diarizer(threshold=CLUSTER_THRESHOLD, log=console.print)
+    # when the count is known, pin it *per window* too (not just at the final merge) so a single
+    # window can't over-split one person into fragments the cross-window merge can never rejoin
+    diarizer = diarize.load_diarizer(
+        threshold=CLUSTER_THRESHOLD, num_speakers=(num_speakers or -1), log=console.print
+    )
 
     def _chunk(done: int, total: int) -> int:
         print(f"\r  separating speakers… {done * 100 // max(total, 1)}%", end="", flush=True)
@@ -79,6 +83,12 @@ def _run(audio_files, work_dir, *, annotate: bool, on_progress=None, num_speaker
     present: set[str] = set(named.values())
     # if the count was pinned, trust it — show even briefly-heard people instead of dropping them
     clusters = _big_clusters(unknown, min_sec=1.0 if num_speakers else MIN_CLUSTER_SEC)
+
+    if not num_speakers and len(clusters) > 12:
+        console.print(
+            f"  [yellow]{len(clusters)} voices auto-detected — that's almost certainly over-split.[/]\n"
+            "  Cancel and re-run with [bold]--speakers <how many were present>[/] for a clean list."
+        )
 
     newly: dict[str, int] = {}
     if annotate and clusters:

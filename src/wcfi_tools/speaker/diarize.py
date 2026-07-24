@@ -115,7 +115,7 @@ def diarize(
 
 
 def merge_units(
-    units: list[tuple[int, list[Seg]]], *, threshold: float = 0.55, num_speakers: int = 0
+    units: list[tuple[int, list[Seg]]], *, threshold: float = 0.45, num_speakers: int = 0
 ) -> list[list[Seg]]:
     """Merge same-speaker groups labeled independently in different windows/files. Groups sharing a
     unit id (same window) are never merged — the diarizer already separated those. With
