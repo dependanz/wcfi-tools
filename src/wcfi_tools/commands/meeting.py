@@ -1,163 +1,77 @@
-"""`wcfi meeting …` commands."""
+"""Guided `wcfi meeting summarize` command and existing speaker tools."""
 
 from __future__ import annotations
 
-import math
-import sys
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
 import typer
-from rich.console import Console
-from rich.prompt import Confirm
-from tqdm import tqdm
 
-from .. import config as cfg
-from ..core import ffmpeg
-from ..core.ffmpeg import ToolNotFound
 from ..guards import require_configured
-from ..meeting import summarize_meeting
-from ..meeting.pipeline import derive_meeting_date, discover_audio
-from ..providers import ProviderError, build_summarizer, build_transcriber
+from ..meeting import configuration as mc
+from ..meeting import guided
+from ..providers import ProviderError
 from . import speakers
 
-app = typer.Typer(help="Summarize board meetings; manage speakers.", no_args_is_help=True)
+app = typer.Typer(help="Summarize meetings; manage speakers.", no_args_is_help=True)
 app.add_typer(speakers.app, name="speakers")
-console = Console()
-
-
-class _ProgressBars:
-    """Turn pipeline ``on_progress(stage, current, total)`` callbacks into tqdm bars."""
-
-    def __init__(self) -> None:
-        self.bar: tqdm | None = None
-        self.stage: str | None = None
-
-    def __call__(self, stage: str, current: int, total: int) -> None:
-        if stage != self.stage:
-            self.close()
-            self.bar = tqdm(total=total, desc=stage.capitalize(), unit="chunk", leave=True)
-            self.stage = stage
-        if self.bar is not None:
-            self.bar.update(current - self.bar.n)
-
-    def close(self) -> None:
-        if self.bar is not None:
-            self.bar.close()
-            self.bar = None
 
 
 @app.command("summarize")
 def summarize(
-    folder: Path = typer.Argument(..., help="Folder containing the meeting audio."),
-    provider: str | None = typer.Option(None, "--provider", help="Summarizer: openai|anthropic."),
-    summary_model: str | None = typer.Option(None, "--summary-model"),
-    transcribe_model: str | None = typer.Option(None, "--transcribe-model"),
-    chunk_minutes: float = typer.Option(5.0, "--chunk-minutes"),
-    emit: str = typer.Option("all", "--emit", help="Comma list: md,paste,all."),
-    force: bool = typer.Option(False, "--force", help="Rebuild cached chunks/transcripts/summaries."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Estimate chunks; no API calls."),
-    prepared_by: str = typer.Option("Danzel Serrano", "--prepared-by"),
-    location: str = typer.Option("44 Van Dyke Rd", "--location"),
-    meeting_time: str = typer.Option("Not explicitly captured", "--meeting-time"),
-    meeting_date: str | None = typer.Option(None, "--meeting-date"),
-    reasoning_effort: str = typer.Option("low", "--reasoning-effort"),
-    identify: Optional[bool] = typer.Option(
-        None, "--identify/--no-identify", help="Identify speakers by name (prompts if unset).",
-    ),
-    speakers_present: int = typer.Option(
-        0, "--speakers", "-n", help="How many people are present (0 = auto-detect). Improves identification.",
-    ),
+    folder: Optional[Path] = typer.Argument(None, help="Meeting folder; prompts when omitted."),
+    provider: Optional[str] = typer.Option(None, "--provider", "--summary-provider",
+                                           help="Text-to-minutes provider: openai|anthropic."),
+    summary_model: Optional[str] = typer.Option(None, "--summary-model"),
+    transcription_provider: Optional[str] = typer.Option(None, "--transcription-provider",
+                                                         help="Audio-to-text provider."),
+    transcribe_model: Optional[str] = typer.Option(None, "--transcribe-model"),
+    chunk_minutes: Optional[float] = typer.Option(None, "--chunk-minutes"),
+    emit: Optional[str] = typer.Option(None, "--emit", help="md or all; Markdown is required."),
+    force: bool = typer.Option(False, "--force", help="Rebuild matching cache after explicit start."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Inspect config/inventory without API calls."),
+    prepared_by: Optional[str] = typer.Option(None, "--prepared-by"),
+    location: Optional[str] = typer.Option(None, "--location"),
+    meeting_time: Optional[str] = typer.Option(None, "--meeting-time"),
+    meeting_date: Optional[str] = typer.Option(None, "--meeting-date", help="YYYY-MM-DD or unknown."),
+    title: Optional[str] = typer.Option(None, "--title"),
+    output: Optional[Path] = typer.Option(None, "--output", help="Private output directory."),
+    identify: Optional[bool] = typer.Option(None, "--identify/--no-identify"),
+    speakers_present: Optional[int] = typer.Option(None, "--speakers", "-n"),
 ) -> None:
-    """Turn a folder of meeting audio into copy-able minutes artifacts."""
-    require_configured()  # `wcfi setup` must be run first
-    folder = folder.resolve()
-    if not folder.is_dir():
-        console.print(f"[red]Folder does not exist:[/] {folder}")
-        raise typer.Exit(1)
-
-    if dry_run:
-        _dry_run(folder, chunk_minutes)
-        raise typer.Exit(0)
-
-    config = cfg.load_config()
+    """Review meeting.wcfi.toml or build it interactively, then explicitly start."""
+    if not dry_run:
+        require_configured()
+    overrides: dict = {}
+    values = {
+        "processing.summarization.provider": provider,
+        "processing.summarization.model": summary_model,
+        "processing.transcription.provider": transcription_provider,
+        "processing.transcription.model": transcribe_model,
+        "processing.transcription.chunk_minutes": chunk_minutes,
+        "processing.speakers.identify": identify,
+        "processing.speakers.count": speakers_present,
+        "meeting.prepared_by": prepared_by, "meeting.location": location,
+        "meeting.time": meeting_time, "meeting.title": title,
+        "output.directory": str(output) if output is not None else None,
+    }
     try:
-        summarizer = build_summarizer(config, provider=provider, model=summary_model)
-        transcriber = build_transcriber(config, model=transcribe_model)
-    except ProviderError as exc:
-        console.print(f"[red]{exc}[/]")
-        raise typer.Exit(1)
-
-    roster: dict[str, str] = {}
-    roster_note = ""
-    if _want_identify(identify):
-        audio_files = discover_audio(folder)
-        if audio_files:
-            roster, roster_note = speakers.identify_present(
-                audio_files, folder / "_work", num_speakers=speakers_present
-            )
-        else:
-            console.print("[yellow]No audio found to identify speakers from.[/]")
-
-    emit_tuple = tuple(e.strip() for e in emit.split(",") if e.strip())
-    bars = _ProgressBars()
-    try:
-        result = summarize_meeting(
-            folder, summarizer=summarizer, transcriber=transcriber,
-            prepared_by=prepared_by, location=location, meeting_date=meeting_date,
-            meeting_time=meeting_time, chunk_minutes=chunk_minutes,
-            reasoning_effort=reasoning_effort, emit=emit_tuple, force=force,
-            roster=roster, roster_note=roster_note,
-            on_progress=bars,
-        )
-    except (ToolNotFound, FileNotFoundError, NotADirectoryError) as exc:
-        bars.close()
-        console.print(f"[red]{exc}[/]")
-        raise typer.Exit(1)
-    finally:
-        bars.close()
-
-    console.print(f"\n[green]Done[/] - {result.meeting_date}")
-    for name, path in result.artifacts.items():
-        console.print(f"  [cyan]{name}[/]  {path}")
-    if result.roster:
-        named = ", ".join(f"{k} = {v}" for k, v in result.roster.items() if v)
-        console.print(f"  [dim]speakers: {named or 'none labeled'}[/]")
-    console.print(f"  [dim]cache: {result.work_dir}[/]")
-
-
-def _want_identify(flag: Optional[bool]) -> bool:
-    """Resolve whether to identify speakers: explicit flag, else an interactive prompt."""
-    if flag is not None:
-        return flag
-    if not sys.stdin.isatty():
-        return False
-    console.print(
-        "\n[bold]Speaker identification[/] (optional): I find the distinct voices, match them to\n"
-        "anyone you've registered, and open a page to name any new voices. Names go into the minutes."
-    )
-    return Confirm.ask("Do it for this meeting?", default=False)
-
-
-def _dry_run(folder: Path, chunk_minutes: float) -> None:
-    try:
-        ffmpeg.require_tool("ffprobe")
-    except ToolNotFound as exc:
-        console.print(f"[red]{exc}[/]")
-        raise typer.Exit(1)
-    audio = discover_audio(folder)
-    if not audio:
-        console.print("[yellow]No audio files found.[/]")
-        raise typer.Exit(1)
-    console.print(f"[bold]Meeting:[/] {folder}")
-    console.print(f"[bold]Date:[/] {derive_meeting_date(folder)}")
-    total_dur = 0.0
-    total_chunks = 0
-    chunk_seconds = chunk_minutes * 60.0
-    for a in audio:
-        dur = ffmpeg.ffprobe_duration(a)
-        n = math.ceil(dur / chunk_seconds)
-        total_dur += dur
-        total_chunks += n
-        console.print(f"  - {a.name}  ({int(dur // 60)}m{int(dur % 60):02d}s, {n} chunk(s))")
-    console.print(f"[bold]Total:[/] {int(total_dur // 60)}m ; ~{total_chunks} chunks at {chunk_minutes:g} min")
+        if meeting_date is not None:
+            values["meeting.date"] = ("unknown" if meeting_date == "unknown"
+                                      else date.fromisoformat(meeting_date))
+        if emit is not None:
+            if emit not in {"md", "all", "md,paste"}:
+                raise mc.ConfigError("--emit must include Markdown: use md, md,paste, or all.")
+            values["output.formats"] = (["markdown"] if emit == "md"
+                                        else ["markdown", "plain_text"])
+        for field, value in values.items():
+            if value is not None:
+                guided.set_value(overrides, field, value)
+        guided.run(folder, overrides, dry_run=dry_run, force=force)
+    except typer.Abort:
+        typer.echo("Cancelled; no further processing.")
+        raise typer.Exit(1) from None
+    except (ValueError, OSError, RuntimeError, ProviderError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None

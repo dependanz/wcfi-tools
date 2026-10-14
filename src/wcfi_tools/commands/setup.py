@@ -131,3 +131,42 @@ def setup(
     path = cfg.save_config(config)
     console.print(f"\n[green]Saved[/] config to {path}")
     console.print("Try it: [bold]wcfi meeting summarize <folder>[/]  (or add --dry-run first)")
+
+
+app = typer.Typer(help="Configure local providers and accounts.", invoke_without_command=True)
+
+
+@app.callback()
+def setup_group(ctx: typer.Context,
+                check: bool = typer.Option(False, "--check"),
+                reset: bool = typer.Option(False, "--reset")):
+    if ctx.invoked_subcommand is None:
+        setup(check=check, reset=reset)
+
+
+@app.command("google")
+def setup_google(client_secrets: str = typer.Option("", "--client-secrets"),
+                 check: bool = typer.Option(False, "--check")):
+    """Authorize a Google Desktop OAuth client; save credentials in the OS keyring."""
+    from pathlib import Path
+    from ..creation.google import authorize, GoogleError
+    from ..meeting.guided import ask, say, word
+    if check:
+        account = cfg.load_config().get("google", {}).get("account")
+        source = cfg.secret_source("google:" + account) if account else None
+        say(f"Google account: {account or 'not configured'}; credentials: {source or 'not stored'}")
+        return
+    try:
+        path = Path(client_secrets or ask("Google Desktop OAuth client JSON path")).expanduser()
+        if not path.is_file():
+            raise GoogleError("Client JSON does not exist; follow the Google setup instructions in README")
+        say("Google authorization opens your browser. Requested scopes allow reading Drive metadata "
+            "and creating/managing files authorized to this app. Tokens are stored in your OS keyring. "
+            "This step does not create a document.")
+        if word('Type "start" to authorize Google, or "cancel" to exit', ("start", "cancel")) != "start":
+            return
+        account = authorize(path)
+        say("Google account configured: " + account)
+    except (ValueError, OSError, GoogleError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from None

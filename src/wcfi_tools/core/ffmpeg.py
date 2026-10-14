@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -54,3 +56,23 @@ def extract_chunk(source: Path, dest: Path, start_seconds: float, duration_secon
         raise RuntimeError(f"ffmpeg failed for {source} at {start_seconds:.1f}s: {result.stderr.strip()}")
     if not dest.exists() or dest.stat().st_size <= 1024:
         raise RuntimeError(f"ffmpeg produced an empty chunk: {dest}")
+
+
+
+def ffprobe_audio_duration(path: Path) -> float:
+    """Verify an audio stream exists, then return a finite positive container duration."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a",
+         "-show_entries", "stream=codec_type:format=duration", "-of", "json", str(path)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Cannot probe selected recording {path}: {result.stderr.strip()}")
+    try:
+        info = json.loads(result.stdout)
+        duration = float(info["format"]["duration"])
+        if not info.get("streams") or not math.isfinite(duration) or duration <= 0:
+            raise ValueError("missing audio stream or invalid duration")
+        return duration
+    except (KeyError, ValueError, TypeError) as exc:
+        raise RuntimeError(f"Selected recording has no usable audio/duration: {path}") from exc

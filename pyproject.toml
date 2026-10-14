@@ -23,6 +23,8 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "numpy>=1.24",
+    "PyYAML>=6",
+    "markdown-it-py>=3",
     # Speaker separation + identification, torch-free via sherpa-onnx (onnxruntime): pyannote
     # segmentation + speaker embeddings + clustering. Models auto-download from public (non-gated)
     # URLs on first use — no account, token, or gated form.
@@ -30,6 +32,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+google = ["google-api-python-client>=2", "google-auth-oauthlib>=1.2"]
+documents = ["featx[documents]>=0.1.0.dev0"]
 dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27"]
 
 [project.scripts]
