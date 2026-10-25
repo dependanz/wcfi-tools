@@ -1,0 +1,8 @@
+import {convert} from './converter.mjs';
+const $=id=>document.getElementById(id);let timer;
+function update(){const result=convert($('input').value,{direction:$('direction').value,tabSize:$('tabs').value,snap:$('snap').checked});$('output').value=result.text;$('copy').disabled=!result.text;$('status').textContent=$('input').value?`${result.count} chord${result.count===1?'':'s'} converted. Review the placement, then copy.`:'Ready when you are.';$('warnings').replaceChildren(...result.warnings.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));$('snap').disabled=$('direction').value!=='inline';$('tabs').disabled=$('direction').value==='broken';}
+$('input').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(update,100);});for(const id of ['direction','tabs','snap'])$(id).addEventListener('change',update);
+$('copy').onclick=async()=>{update();try{await navigator.clipboard.writeText($('output').value);$('status').textContent='Copied.';}catch{$('output').focus();$('output').select();$('status').textContent='Select Copy from your device’s text menu.';}};
+$('clear').onclick=()=>{if($('input').value&&!confirm('Clear this sheet?'))return;$('input').value='';update();$('input').focus();};
+$('example').onclick=()=>{if($('input').value&&!confirm('Replace this sheet with the example?'))return;if($('direction').value==='broken'){$('input').value='Verse 1\nG \nMorning \nD/F# \nlight is here\n\nWe re\nEm7\nturn home \nCadd9\ntogether\nB7(b9) Em';update();return;}$('direction').value='inline';$('input').value='Verse 1\nG              D/F#\nMorning opens, light comes in\nEm7           Cadd9\nEvery voice can start again\n\nBridge\nB7(b9)  Em\nHome is here';update();};
+update();
