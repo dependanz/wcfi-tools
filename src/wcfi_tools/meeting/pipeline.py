@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from ..core import ffmpeg
 from ..providers.base import Summarizer, Transcriber
@@ -280,7 +281,7 @@ def derive_meeting_date(meeting_dir: Path) -> str:
     month, day, year = (int(p) for p in match.groups())
     full_year = 2000 + year if year < 70 else 1900 + year
     try:
-        return datetime(full_year, month, day).strftime("%b %d, %Y").replace(" 0", " ")
+        return date(full_year, month, day).strftime("%b %d, %Y").replace(" 0", " ")
     except ValueError:
         return "Not explicitly captured"
 
@@ -304,7 +305,7 @@ def _emit(cb: Progress | None, stage: str, current: int, total: int) -> None:
 
 
 def _fmt(seconds: float) -> str:
-    total = int(round(seconds))
+    total = round(seconds)
     h, m, s = total // 3600, (total % 3600) // 60, total % 60
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 

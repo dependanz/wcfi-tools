@@ -11,6 +11,7 @@ __pycache__/
 build/
 dist/
 .venv/
+.venv-listen/
 venv/
 env/
 .pytest_cache/
@@ -21,9 +22,15 @@ env/
 _work/
 _minutes_work/
 *.wav
+real-sources/
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+
+# Desktop development caches / executables; keep lockfiles and web assets.
+desktop/node_modules/
+desktop/src-tauri/target/
+native/wcfi_analysis_node/deps/

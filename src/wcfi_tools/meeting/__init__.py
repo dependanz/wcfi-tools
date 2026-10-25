@@ -2,4 +2,4 @@
 
 from .pipeline import PipelineResult, summarize_meeting
 
-__all__ = ["summarize_meeting", "PipelineResult"]
+__all__ = ["PipelineResult", "summarize_meeting"]

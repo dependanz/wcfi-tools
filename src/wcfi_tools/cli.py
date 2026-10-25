@@ -5,7 +5,10 @@ from __future__ import annotations
 import typer
 
 from . import __version__
+from .commands import audio as audio_cmd
 from .commands import meeting as meeting_cmd
+from .commands import monitor_control as monitor_control_cmd
+from .commands import soundcheck as soundcheck_cmd
 from .commands.setup import setup as setup_command
 
 app = typer.Typer(
@@ -16,6 +19,9 @@ app = typer.Typer(
 
 app.command("setup")(setup_command)
 app.add_typer(meeting_cmd.app, name="meeting")
+app.add_typer(soundcheck_cmd.app, name="soundcheck")
+app.add_typer(audio_cmd.app, name="audio")
+app.add_typer(monitor_control_cmd.app, name="monitor-control")
 
 
 def _version_callback(value: bool) -> None:

@@ -24,6 +24,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
+monitor-control = ["dxcam[winrt]>=0.3,<0.4; sys_platform == 'win32'"]
+soundcheck = ["numpy>=1.26", "scipy>=1.12", "soundfile>=0.12"]
 
 [project.scripts]
 wcfi = "wcfi_tools.cli:app"

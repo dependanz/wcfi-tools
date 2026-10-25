@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -44,7 +45,7 @@ class _ProgressBars:
 
 @app.command("summarize")
 def summarize(
-    folder: Path = typer.Argument(..., help="Folder containing the meeting audio."),
+    folder: Annotated[Path, typer.Argument(help="Folder containing the meeting audio.")],
     provider: str | None = typer.Option(None, "--provider", help="Summarizer: openai|anthropic."),
     summary_model: str | None = typer.Option(None, "--summary-model"),
     transcribe_model: str | None = typer.Option(None, "--transcribe-model"),

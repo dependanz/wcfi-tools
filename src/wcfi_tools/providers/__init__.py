@@ -7,7 +7,7 @@ from typing import Any
 from .. import config as cfg
 from .base import Summarizer, Transcriber
 
-__all__ = ["Summarizer", "Transcriber", "build_summarizer", "build_transcriber", "ProviderError"]
+__all__ = ["ProviderError", "Summarizer", "Transcriber", "build_summarizer", "build_transcriber"]
 
 
 class ProviderError(RuntimeError):

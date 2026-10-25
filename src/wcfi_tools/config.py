@@ -50,7 +50,7 @@ def is_configured() -> bool:
     try:
         with path.open("rb") as handle:
             data = tomllib.load(handle)
-    except Exception:  # pragma: no cover - treat an unreadable config as not configured
+    except Exception:  # noqa: BLE001 - an unreadable config is not configured
         return False
     return bool(data.get("meta", {}).get("configured", False))
 
@@ -102,7 +102,7 @@ def _keyring():
         import keyring
 
         return keyring
-    except Exception:  # pragma: no cover - environment dependent
+    except Exception:  # noqa: BLE001 - optional keyring backend can fail on import
         return None
 
 
@@ -115,7 +115,7 @@ def get_secret(provider: str) -> str | None:
     if keyring is not None:
         try:
             return keyring.get_password(KEYRING_SERVICE, env_var or provider)
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: BLE001 - optional OS credential backend
             return None
     return None
 
@@ -129,7 +129,7 @@ def set_secret(provider: str, value: str) -> bool:
     try:
         keyring.set_password(KEYRING_SERVICE, env_var, value)
         return True
-    except Exception:  # pragma: no cover
+    except Exception:  # noqa: BLE001 - optional OS credential backend
         return False
 
 
@@ -143,6 +143,6 @@ def secret_source(provider: str) -> str | None:
         try:
             if keyring.get_password(KEYRING_SERVICE, env_var or provider):
                 return "keyring"
-        except Exception:  # pragma: no cover
+        except Exception:  # noqa: BLE001 - optional OS credential backend
             return None
     return None
