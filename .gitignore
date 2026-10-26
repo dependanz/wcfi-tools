@@ -34,3 +34,4 @@ Thumbs.db
 desktop/node_modules/
 desktop/src-tauri/target/
 native/wcfi_analysis_node/deps/
+native/wcfi_control_node/build*/

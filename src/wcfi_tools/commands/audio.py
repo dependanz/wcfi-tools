@@ -9,6 +9,8 @@ import typer
 
 from ..audio.emulator import SCENARIOS
 from .ableton import app as ableton_app
+from .audio_detect import app as detect_app
+from .control_node import app as control_node_app
 from .full_mix_benchmark import app as full_mix_benchmark_app
 from .gain_shadow import app as gain_shadow_app
 from .master_benchmark import app as master_benchmark_app
@@ -16,7 +18,7 @@ from .mix_preference import app as mix_preference_app
 from .role_analysis import app as role_analysis_app
 from .songbench_benchmark import app as songbench_benchmark_app
 
-app = typer.Typer(help="Local audio interface emulator (Windows ASIO prototype).", no_args_is_help=True)
+app = typer.Typer(help="Local audio detection, analysis, and interface tools.", no_args_is_help=True)
 emulate_app = typer.Typer(help="Supply raw real/procedural inputs to the WCFI ASIO driver.",
                           no_args_is_help=True)
 driver_app = typer.Typer(help="Inspect the optional native WCFI ASIO driver.", no_args_is_help=True)
@@ -27,6 +29,8 @@ emulator_app = typer.Typer(help="Start the shared emulator service or open its d
 app.add_typer(emulator_app, name="emulator")
 
 app.add_typer(ableton_app, name="ableton")
+app.add_typer(detect_app, name="detect")
+app.add_typer(control_node_app, name="control-node")
 app.add_typer(role_analysis_app, name="analyze")
 app.add_typer(master_benchmark_app, name="master-benchmark")
 app.add_typer(full_mix_benchmark_app, name="full-mix-benchmark")

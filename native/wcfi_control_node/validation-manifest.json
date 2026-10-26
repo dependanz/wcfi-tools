@@ -1,0 +1,78 @@
+{
+  "sdk_revision": "3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96",
+  "vst_plugin_validator_passed": 47,
+  "vst_plugin_validator_failed": 0,
+  "native_test_result": "passed",
+  "files": [
+    {
+      "file": "dsp.h",
+      "bytes": 2321,
+      "sha256": "9F8B962C1CE196700A63D55EAF4A34080307B84633D984F503CDFA0C80D9BAD7"
+    },
+    {
+      "file": "dsp.cpp",
+      "bytes": 7314,
+      "sha256": "5A60219BECF33316792EBD17AB9BF58040699C7CFF56ACB39D669B4122092BB5"
+    },
+    {
+      "file": "node.h",
+      "bytes": 2602,
+      "sha256": "41BE98B71E5904525BF1A4BDB949963C69392D65DEE54F1099954A56DD4378E7"
+    },
+    {
+      "file": "node.cpp",
+      "bytes": 9416,
+      "sha256": "7A38073F404B4E136DABD131B2A85D5C5E9630E3DC3BEE89CEF3619AB5F3AB4C"
+    },
+    {
+      "file": "factory.cpp",
+      "bytes": 651,
+      "sha256": "051B179FCC516A49C36EC7222783288BA244912EF92EA8A51BE896252F3722DE"
+    },
+    {
+      "file": "tests.cpp",
+      "bytes": 15599,
+      "sha256": "74DEF5FBBDD10D50AF2DC8265D430383D293EBB7465DF80E763EF04327A00CE5"
+    },
+    {
+      "file": "CMakeLists.txt",
+      "bytes": 1882,
+      "sha256": "4C889806D117988459558CC714CE12388289F929959C2D265DEF28496C7EC29F"
+    },
+    {
+      "file": "build.ps1",
+      "bytes": 2119,
+      "sha256": "A3C47725B9B98F2CBA4F06DFF91DFF2EF322F77A66D37325F361BDDA720762DA"
+    },
+    {
+      "file": "README.md",
+      "bytes": 5832,
+      "sha256": "4354A346571060D729F263BFAF4F94D0A974D9846A1C982184AA6B3053FD2FE9"
+    },
+    {
+      "file": "build/bin/WcfiControlBridge.dll",
+      "bytes": 16896,
+      "sha256": "3A610EC8D781782F09EE4DE70A957760DE51232EEFC646EA72727775066D7B1C"
+    },
+    {
+      "file": "build/bin/control_tests.exe",
+      "bytes": 155136,
+      "sha256": "C564F6D4403FC5B1BFB8E204B9A9426FFE3B6665051581C78E70C7EF1C8822B7"
+    },
+    {
+      "file": "build/VST3/Release/WCFI Control Node.vst3/Contents/x86_64-win/WCFI Control Node.vst3",
+      "bytes": 386048,
+      "sha256": "2392C334AC036B971282770575F6AB31A27AA0CACEB8E64D07217EA9633482B0"
+    },
+    {
+      "file": "plugin-validator-results.txt",
+      "bytes": 10394,
+      "sha256": "2A1FD1765A7A50AA18AD368133DAFB2B5ADD05334380F07966DA18EBCBE15BD8"
+    },
+    {
+      "file": "native-test-results.txt",
+      "bytes": 1404,
+      "sha256": "AF5FFB62953485BAD7553E5ACA9B75CFEFFC0798274B25C72D1B121723E6E4EA"
+    }
+  ]
+}

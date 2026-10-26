@@ -11,6 +11,8 @@ First tools:
   copy-able minutes artifacts.
 - **`wcfi soundcheck`** — analyze a full-band multitrack rehearsal and create a calibrated
   Ableton Live 11 set copy with fixed input gain and restrained EQ. Runs locally without API keys.
+- **`wcfi audio detect howler`** — listen through a microphone or scan a recording for
+  persistent tones and feedback-like growth. See [audio detection](docs/audio-detection.md).
 - **`wcfi audio ableton`** — inspect the open Live Set, control faders and exposed plug-in
   parameters, and move existing devices through a background Remote Script. See the
   [Ableton bridge guide](docs/ableton-bridge.md) for installation and activation.

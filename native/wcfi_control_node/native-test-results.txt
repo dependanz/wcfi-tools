@@ -1,0 +1,24 @@
+Start testing: Oct 25 11:22 Eastern Daylight Time
+----------------------------------------------------------
+1/1 Testing: control_node
+1/1 Test: control_node
+Command: "C:/dev/wcfi-tools/native/wcfi_control_node/build/bin/control_tests.exe"
+Directory: C:/dev/wcfi-tools/native/wcfi_control_node/build
+"control_node" start time: Oct 25 11:22 Eastern Daylight Time
+Output:
+----------------------------------------------------------
+PASS: 160 exact-unity host cases (mono/stereo, float32/64, in-place, silence, realtime/offline).
+PASS: DSP rate, gain bounds, silence, pause, reset, transient, linked headroom, guard recovery, invalid input.
+PASS: native C ABI parity, 4 block partitions, in-place processing, reset, invalid arguments.
+PASS: parameter IDs, state persistence, truncated state rejection, sample offsets, host edit priority, invalid automation.
+PASS: concurrent state mailbox coherence with bounded readers and lock-free x64 atomics.
+PASS: all native tests. 10s stereo audio DSP elapsed 0.067085s (0.671% realtime wall time, idle-priority test process).
+<end of output>
+Test time =   1.85 sec
+----------------------------------------------------------
+Test Passed.
+"control_node" end time: Oct 25 11:22 Eastern Daylight Time
+"control_node" time elapsed: 00:00:01
+----------------------------------------------------------
+
+End testing: Oct 25 11:22 Eastern Daylight Time
