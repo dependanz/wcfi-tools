@@ -5,6 +5,7 @@ The engine is UI-agnostic so the same core can later back a web app or desktop a
 
 First tools:
 
+- **`wcfi audio shadow-home`** â€” observe recorded Ableton playback and log experimental mix-policy decisions without applying them.
 - **`wcfi setup`** — one-time interactive setup for the API keys the other tools need (OpenAI for
   transcription; OpenAI or Anthropic/Claude for summarization). Keys are stored in your OS keyring.
 - **`wcfi meeting summarize <folder>`** — turn a folder of meeting audio into a summarized set of
@@ -232,6 +233,41 @@ The versioned [shared-activity evaluator](docs/source-balance-activity.md) measu
 all source roles over the same raw-supported frames and reports insufficient
 overlap explicitly. It retains the previous models for comparison; automatic
 mix edits remain disabled.
+
+## Recorded-set home shadow (experimental)
+
+`wcfi audio shadow-home` observes Analysis Nodes from a recorded rehearsal played
+through an open Ableton Live 11 set. It evaluates three existing policies without
+applying proposed gain changes:
+
+- **V2:** one-second post-effect level groups for six music roles.
+- **Coordinator:** 100 ms dry/pre-effect bins across seven tracks, with calibration.
+- **RED:** 100 ms pre-effect activity-calibration observations.
+
+```powershell
+# Inspect the available node roles before playing the recorded arrangement.
+wcfi audio shadow-home bind
+
+# Keep numerical libraries at one thread for the bounded observer.
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:OMP_NUM_THREADS = '1'
+$env:MKL_NUM_THREADS = '1'
+
+# Use a new output directory for every run. Start this, then press Play in Live.
+wcfi audio shadow-home run --output "_work\home-shadow-run-001" --seconds 600
+```
+
+The `bind` command reports node roles and identities; `run` additionally checks
+that the nodes belong to the Live process it inspects. While collecting, the tool
+reads host state and stops early if non-transport state changes. It does not
+move faders, change devices or routing, operate the transport, save PCM, or
+send audio to a remote service. Results are JSON/JSONL observations, proposed
+decisions, and a `summary.json` report in the specified output directory.
+
+**Use only for offline rehearsal playback, not during a live service.**
+The policies remain experimental, not live-eligible, and not validated as an
+automatic mixer. See [the home-shadow guide](docs/home-shadow.md) for
+Analysis Node setup, full options, output schema, and failure handling.
 
 ## Configuration & secrets
 

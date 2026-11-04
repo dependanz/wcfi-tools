@@ -16,6 +16,7 @@ from .gain_shadow import app as gain_shadow_app
 from .master_benchmark import app as master_benchmark_app
 from .mix_preference import app as mix_preference_app
 from .role_analysis import app as role_analysis_app
+from .shadow_home import app as shadow_home_app
 from .songbench_benchmark import app as songbench_benchmark_app
 
 app = typer.Typer(help="Local audio detection, analysis, and interface tools.", no_args_is_help=True)
@@ -37,6 +38,7 @@ app.add_typer(full_mix_benchmark_app, name="full-mix-benchmark")
 app.add_typer(gain_shadow_app, name="gain-shadow")
 app.add_typer(songbench_benchmark_app, name="songbench-benchmark")
 app.add_typer(mix_preference_app, name="mix-preference")
+app.add_typer(shadow_home_app, name="shadow-home")
 
 
 def _error(exc):
