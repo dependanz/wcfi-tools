@@ -5,7 +5,7 @@ The engine is UI-agnostic so the same core can later back a web app or desktop a
 
 First tools:
 
-- **`wcfi audio shadow-home`** â€” observe recorded Ableton playback and log experimental mix-policy decisions without applying them.
+- **`wcfi audio shadow-home`** — observe recorded Ableton playback and log experimental mix-policy decisions without applying them.
 - **`wcfi setup`** — one-time interactive setup for the API keys the other tools need (OpenAI for
   transcription; OpenAI or Anthropic/Claude for summarization). Keys are stored in your OS keyring.
 - **`wcfi meeting summarize <folder>`** — turn a folder of meeting audio into a summarized set of
