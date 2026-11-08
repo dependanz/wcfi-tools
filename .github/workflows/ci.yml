@@ -22,3 +22,20 @@ jobs:
         run: ruff check .
       - name: Test
         run: pytest -q
+
+  web-prototypes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Music Ministry JavaScript tests
+        run: |
+          node --test \
+            prototypes/music-ministry/tests/chords.test.mjs \
+            prototypes/music-ministry/tests/lineups.test.mjs \
+            prototypes/music-ministry/tests/ministry.test.mjs \
+            prototypes/music-ministry/tests/song-export.test.mjs
+      - name: Chord Converter JavaScript tests
+        run: node --test prototypes/chord-converter/tests/converter.test.mjs
