@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#094773">
+  <meta name="description" content="A place to prepare, play and worship together. WCFI Music Ministry private preview.">
+  <title>WCFI · Music Ministry</title>
+  <link rel="icon" href="./wcfi-logo.png">
+  <link rel="stylesheet" href="./hub.css">
+  <link rel="stylesheet" href="./ministry.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="https://wcfi.org/" aria-label="Return to WCFI website" title="Return to wcfi.org"><svg class="brand-return" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4m6-6-6 6 6 6"/></svg><img class="brand-logo" src="./wcfi-logo.png" alt="Word Christian Fellowship International, New Jersey" width="148" height="58"></a>
+      <div class="top-actions"><time id="header-clock" class="header-clock" aria-live="off" title="Local time"></time><button class="icon-button" id="about-open" aria-label="About this preview"></button></div>
+    </header>
+    <main id="view" tabindex="-1"></main>
+    <footer class="app-footer"><span>PREPARE. PLAY. WORSHIP.</span><span>WCFI Music Ministry <i></i> Preview</span></footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <dialog id="about"><button class="icon-button dialog-close" id="about-close" aria-label="Close information">×</button><span class="eyebrow">WELCOME IN</span><h2>A space for the music<br>we share.</h2><p>This is a working design preview for our ministry: make a line-up, explore the songbook, and find a moment to prepare.</p><p>Songs you add, edits, drafts and personal line-ups are saved in this browser only. They won’t sync across devices or with the team. Clearing this browser’s site data removes those saves.</p><p>Announced line-ups are a supplied snapshot; your edits do not update them for the team. The catalogue is not connected to CCLI.</p><button class="primary" id="about-done">Let’s explore</button></dialog>
+  <script type="module" src="./hub.mjs"></script>
+</body>
+</html>
