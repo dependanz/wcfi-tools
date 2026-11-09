@@ -10,7 +10,7 @@ import json
 import re
 import sqlite3
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROLES = frozenset({"member", "song_editor", "worship_leader", "admin"})
@@ -37,7 +37,7 @@ class VersionConflict(Exception):
 
 
 def _utc() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _json(value: object) -> str:
@@ -259,7 +259,7 @@ class MusicStore:
             if len({x["id"] for x in songs}) != len(songs):
                 raise InvalidRecord("Duplicate IDs in catalogue")
             if songs:
-                collision = db.execute("SELECT id FROM songs WHERE id IN (%s)" % (",".join("?" * len(songs))),
+                collision = db.execute("SELECT id FROM songs WHERE id IN ({})".format(",".join("?" * len(songs))),
                                        tuple(x["id"] for x in songs)).fetchone()
                 if collision:
                     raise VersionConflict("Catalogue contains an existing song ID")
