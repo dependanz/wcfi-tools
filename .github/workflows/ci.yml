@@ -39,3 +39,20 @@ jobs:
             prototypes/music-ministry/tests/song-export.test.mjs
       - name: Chord Converter JavaScript tests
         run: node --test prototypes/chord-converter/tests/converter.test.mjs
+
+  music-store-prototype:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run isolated synthetic music-store tests
+        run: |
+          python -W error::ResourceWarning -m unittest discover \
+            -s prototypes/music-ministry/tests \
+            -p test_shared_store.py \
+            -v
