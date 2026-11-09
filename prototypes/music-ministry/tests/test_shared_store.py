@@ -1,16 +1,15 @@
 """Synthetic-only Phase-3 tests. No browser, network, real accounts or Wix access."""
 from __future__ import annotations
 
-import json
 import sqlite3
-from contextlib import closing
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from shared_store import (MusicStore, NotAuthenticated, NotAuthorized, InvalidRecord, VersionConflict)
+from shared_store import InvalidRecord, MusicStore, NotAuthenticated, NotAuthorized, VersionConflict
 
 
 def chart(song_id='song-a'):
@@ -32,9 +31,8 @@ class SharedStoreTests(unittest.TestCase):
         self.db.initialize()
         # Test-only initial administrator fixture. There is deliberately no
         # public bootstrap endpoint or self-service admin creation API.
-        with closing(sqlite3.connect(self.path)) as conn:
-            with conn:
-                conn.execute("INSERT INTO members VALUES(?,?,?,?)", ('admin-subject', 1, '["admin"]', 'fixture'))
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            conn.execute("INSERT INTO members VALUES(?,?,?,?)", ('admin-subject', 1, '["admin"]', 'fixture'))
         self.db.upsert_member('admin-subject', 'viewer', {'member'}, True)
         self.db.upsert_member('admin-subject', 'editor', {'song_editor'}, True)
         self.db.upsert_member('admin-subject', 'leader', {'worship_leader'}, True)
