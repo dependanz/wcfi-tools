@@ -2,6 +2,10 @@
 
 A one-screen tool center following the original sketch: WCFI identity, Music Ministry title, an upcoming-line-up preview above Line-up Maker, Song Catalogue and Resources. A configured private snapshot selects the featured service. All line-ups opens announced plans and personal drafts. Without a configured snapshot, the original synthetic demonstration remains available. Long content scrolls within panels; the main page does not scroll. No canvas or Three.js imports run.
 
+## Member-only future application
+
+The production Music Ministry application will require **approved member sign-in for all songs, charts, lineups, and resources**. Authorization roles and Phase 3 security acceptance are specified in [MEMBER_ACCESS.md](MEMBER_ACCESS.md). This V19 owner-only preview does **not** yet implement member authentication; no Wix site changes are authorized before Phase 6.
+
 ## Brand and navigation
 
 The blue/white theme follows [the public WCFI site](https://www.wcfi.org/), inspected on 2026-10-17. Its main blue is `#094773`; lighter blues and navy surfaces adapt it for the tool UI. Headings use the local sans-serif stack. The official white logo is served locally as `dist/wcfi-logo.png`, downloaded unchanged from [the public site asset](https://static.wixstatic.com/media/c70496_846b491fc4914711851c58f37f06250e~mv2.png). CSS framing excludes the source image's transparent right margin, as the church site's own logo treatment does.
