@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BACKUP_MAX_BYTES,captureLocalBackup,inspectLocalBackup,isMusicBackupKey,validateLocalBackup} from './browser_backup.mjs';
+import {BACKUP_MAX_BYTES,captureLocalBackup,inspectLocalBackup,isMusicBackupKey,validateLocalBackup} from '../dist/browser_backup.mjs';
 
 class FakeStorage {
   constructor(entries) {this.data = new Map(Object.entries(entries));}
