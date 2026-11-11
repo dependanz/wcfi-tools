@@ -195,6 +195,8 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
             ready_lineups += 1
             if not lineup.get('date'):
                 undated_lineups += 1
+    if demo_excluded > 1:
+        blockers.append("lineups:duplicate_bundled_demo")
     real_lineups = len(lineup_items) - demo_excluded
     draft = hub.get('draft')
     if isinstance(draft, dict) and any(draft.get(k) for k in ('title', 'notes', 'date', 'songs')):
