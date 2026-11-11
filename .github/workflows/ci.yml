@@ -30,6 +30,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Check Music Ministry module syntax
+        run: |
+          node --check prototypes/music-ministry/dist/hub.mjs
+          node --check prototypes/music-ministry/dist/browser_backup.mjs
+          node --check prototypes/music-ministry/dist/browser_restore.mjs
       - name: Music Ministry JavaScript tests
         run: |
           node --test \
