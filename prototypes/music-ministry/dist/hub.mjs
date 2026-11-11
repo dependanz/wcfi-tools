@@ -16,7 +16,8 @@ let ministry=null,ministryError=false;
 try{ministry=await loadMinistry();registerMinistrySongs(ministry,songs);}catch{ministryError=true;}
 import {transpose,tokens,pitch,isChord} from './chords.mjs';
 import {songFor,keysFor,loadData,saveLineup,cleanSongs,songExport,songExportFilename} from './lineups.mjs';
-import {captureLocalBackup,inspectLocalBackup} from './browser_backup.mjs';
+import {BACKUP_MAX_BYTES,captureLocalBackup,inspectLocalBackup} from './browser_backup.mjs';
+import {planLocalRestore,restoreLocalBackupIntoEmptyStorage} from './browser_restore.mjs';
 
 const $=id=>document.getElementById(id);
 const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -169,7 +170,33 @@ function downloadLocalWorkBackup(){
     notify('Backup download started. Check the saved file before relying on it.');
   }catch(error){notify('Backup failed: '+(error?.message||'browser storage unavailable'));}
 }
+async function restoreSelectedLocalBackup(file){
+  if(!file)return;
+  try{
+    if(!['localhost','127.0.0.1'].includes(location.hostname)||location.port==='8816')
+      throw new Error('Restore is available only in an isolated localhost preview (not port 8816).');
+    if(file.size>BACKUP_MAX_BYTES)throw new Error('Selected backup file exceeds the size limit.');
+    const envelope=JSON.parse(await file.text());
+    const plan=planLocalRestore(localStorage,envelope); // Read-only inspection, no writes.
+    const summary='Local backup from '+plan.backupDate+'\\n'+plan.recordCount+
+      ' saved records, including '+plan.editorDraftCount+' unfinished editor draft(s).\\n';
+    if(!plan.safeToRestore){
+      alert(summary+'\\nThis browser origin already contains '+plan.existingKeys.length+
+        ' Music Ministry storage key(s). Restore is blocked to prevent overwriting existing work.');
+      return;
+    }
+    if(!confirm(summary+'\\nRestore this file into the EMPTY Music Ministry storage on this localhost preview?'+
+      '\\nNo files are uploaded. Your other browser apps are unchanged. After restoring, this page reloads.'))return;
+    const result=restoreLocalBackupIntoEmptyStorage(localStorage,envelope);
+    alert('Restored '+result.restoredRecords+' local records. The page will reload.');
+    location.reload();
+  }catch(error){
+    alert('Local restore did not complete: '+(error?.message||'Invalid backup file')+
+      '\\nKeep the original backup. Do not clear browser storage.');
+  }
+}
 async function workshopAction(button){const action=button.dataset.action;if(!action?.startsWith('sx-'))return false;
+  if(action==='sx-inspect-restore'){document.getElementById('local-backup-restore-file')?.click();return true;}
   if(action==='sx-backup-local'){downloadLocalWorkBackup();return true;}
  if(action==='sx-export-all'){const items=visibleSongs();if(items.length)downloadSongs(items,'wcfi-all-songs-'+new Date().toISOString().slice(0,10));return true;}
  if(action==='sx-export-song'){
@@ -258,7 +285,7 @@ function songRow(song,{key=song.key,index,route=`song/${song.id}`}={}){
   return `<button class="song-row" data-route="${escape(route)}">${index!==undefined?`<span class="order">${String(index+1).padStart(2,'0')}</span>`:`<span class="song-emblem">${icon('music')}</span>`}<span class="song-info"><strong>${escape(song.title)}</strong><small>${song.artist?'By '+escape(song.artist)+' · ':''}${escape(song.category)}${song.localChart?'':' · '+song.bpm+' BPM · '+escape(song.meter)}</small></span><span class="caption">${song.localChart?'Local chart':'Original demo'}</span><span class="pill">${keyText(key)}</span>${icon('arrow','arrow')}</button>`;
 }
 function catalogueRows(){if(!visibleSongs().length)return '<div class="empty"><b>No songs yet.</b>Choose Add song to start your catalogue.</div>';const list=visibleSongs().filter(s=>(catalogueCategory==='All songs'||s.category===catalogueCategory)&&`${s.title} ${s.artist||''} ${s.description} ${s.category} ${s.sections.flatMap(x=>x.lines).join(' ')}`.toLowerCase().includes(catalogueQuery.toLowerCase()));return list.length?list.map(s=>songRow(s)).join(''):'<div class="empty"><b>No songs found.</b>Try another title, lyric or category.</div>';}
-function catalogue(){return `<section class="screen tool">${heading('Song Catalogue','A songbook for the whole team.',`<div class="song-export-actions"><button class="secondary" data-action="sx-backup-local" title="Download all browser-local WCFI songs, notes, lineups, arrangements and drafts. Keep private.">Backup local work</button><button class="secondary" data-action="sx-export-all" ${visibleSongs().length?'':'disabled'}>Export all songs</button><button class="primary" data-action="sx-new-song">+ Add song</button></div>`)}${draftResumeButton()}<div class="toolbar">${search('catalogue-search','Search titles, artists or lyrics…',catalogueQuery)}<select id="catalogue-category" aria-label="Song category">${['All songs',...new Set(visibleSongs().map(s=>s.category))].map(c=>`<option ${c===catalogueCategory?'selected':''}>${escape(c)}</option>`).join('')}</select></div><div id="catalogue-results" class="surface scroll catalogue-content">${catalogueRows()}</div></section>`;}
+function catalogue(){return `<section class="screen tool">${heading('Song Catalogue','A songbook for the whole team.',`<div class="song-export-actions"><button class="secondary" data-action="sx-backup-local" title="Download all browser-local WCFI songs, notes, lineups, arrangements and drafts. Keep private.">Backup local work</button><button class="secondary" data-action="sx-inspect-restore" title="Inspect a backup, then optionally restore into an empty isolated localhost preview.">Inspect / restore</button><input id="local-backup-restore-file" type="file" accept=".json,application/json" hidden><button class="secondary" data-action="sx-export-all" ${visibleSongs().length?'':'disabled'}>Export all songs</button><button class="primary" data-action="sx-new-song">+ Add song</button></div>`)}${draftResumeButton()}<div class="toolbar">${search('catalogue-search','Search titles, artists or lyrics…',catalogueQuery)}<select id="catalogue-category" aria-label="Song category">${['All songs',...new Set(visibleSongs().map(s=>s.category))].map(c=>`<option ${c===catalogueCategory?'selected':''}>${escape(c)}</option>`).join('')}</select></div><div id="catalogue-results" class="surface scroll catalogue-content">${catalogueRows()}</div></section>`;}
 function lineups(){return `<section class="screen tool">${heading('Latest line-ups','',`<button class="primary" data-route="maker">${icon('plus')} Make a line-up</button>`)}<div class="surface scroll lineups-list">${ministry?ministryViews.listCards():''}${recent().map(l=>`<button class="lineup-card" data-route="lineup/${encodeURIComponent(l.id)}"><span class="eyebrow">${l.demo?'EXAMPLE LINE-UP':escape(dateText(l.date))}</span><h2>${escape(l.title)}</h2><p>${l.songs.slice(0,3).map(x=>escape(songFor(x.id).title)).join(' · ')}${l.songs.length>3?'…':''}</p><footer><span>${l.songs.length} songs · ${l.demo?'Try the flow':ministry?'Personal draft · not announced':'Saved in this browser'}</span>${icon('arrow')}</footer></button>`).join('')||(!ministry?'<div class="empty"><b>A fresh start.</b>Create your first line-up with the maker.</div>':'')}</div></section>`;}
 function lineupView(id){if(ministryViews?.lineup(id))return ministryViews.detail(id,current.tab,current.from);const l=data.lineups.find(x=>x.id===id);if(!l)return missing();return `<section class="screen tool">${heading(l.title,l.demo?'Example line-up · Original demo songs':(ministry?'Personal draft · ':'')+dateText(l.date),`<button class="primary" data-action="edit-lineup" data-id="${escape(id)}">${icon('edit')} Edit</button>`,current.from)}<div class="surface scroll lineup-detail">${l.notes?`<p class="lineup-notes">${escape(l.notes)}</p>`:''}${l.songs.map((x,i)=>songRow(songFor(x.id),{key:x.key,index:i,route:`song/${x.id}?key=${encodeURIComponent(x.key)}&lineup=${encodeURIComponent(id)}`})).join('')}</div><p class="caption">Tap a song to open its chart in the line-up key. Personal transposition won’t change this line-up.</p></section>`;}
 function pickerRows(){const list=visibleSongs().filter(s=>`${s.title} ${s.category}`.toLowerCase().includes(pickerQuery.toLowerCase()));return list.map(s=>{const added=data.draft.songs.some(x=>x.id===s.id);return `<div class="picker-row"><span class="song-info"><strong>${escape(s.title)}</strong><small>${escape(s.category)} · ${s.metadataOnly?'Key to be chosen':escape(s.key)+' · '+s.bpm+' BPM'}</small></span><button class="icon-button" data-action="add-song" data-id="${s.id}" data-added="${added}" aria-label="${added?'Already added:':'Add'} ${escape(s.title)}" ${added?'disabled':''}>${icon(added?'check':'plus')}</button></div>`;}).join('')||'<p class="empty">No matching songs.</p>';}
@@ -367,7 +394,12 @@ $('view').addEventListener('input',e=>{
   if(e.target.id==='picker-search'){pickerQuery=e.target.value;$('picker-results').innerHTML=pickerRows();}
   for(const [id,key] of [['draft-title','title'],['draft-date','date'],['draft-notes','notes']])if(e.target.id===id){data.draft[key]=e.target.value;persist();}
 });
-$('view').addEventListener('change',e=>{
+$('view').addEventListener('change',async e=>{
+  if(e.target.id==='local-backup-restore-file'){
+    const file=e.target.files?.[0];e.target.value='';
+    await restoreSelectedLocalBackup(file);
+    return;
+  }
   if(current.name==='songedit')syncSongEditor();
   if(e.target.id==='catalogue-category'){catalogueCategory=e.target.value;$('catalogue-results').innerHTML=catalogueRows();}
   if(e.target.id==='workshop-key'){
