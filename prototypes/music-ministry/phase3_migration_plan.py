@@ -59,7 +59,7 @@ def _json_object(raw: str) -> dict:
         return obj
     result = json.loads(raw, object_pairs_hook=duplicate_check)
     if not isinstance(result, dict):
-        raise ValueError('Expected object')
+        raise TypeError('Expected object')
     return result
 
 
@@ -68,9 +68,9 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
     if not isinstance(envelope, dict) or envelope.get('format') != FORMAT or type(envelope.get('version')) is not int or envelope['version'] != 1 or envelope.get('scope') != 'browser-local-only':
         raise ValueError('Unsupported full local backup')
     if not isinstance(envelope.get('exportedAt'), str):
-        raise ValueError('Missing backup date')
+        raise TypeError('Missing backup date')
     try:
-        datetime.fromisoformat(envelope['exportedAt'].replace('Z', '+00:00'))
+        datetime.fromisoformat(envelope['exportedAt'])
     except ValueError as exc:
         raise ValueError('Invalid backup date') from exc
     rows = envelope.get('records')
