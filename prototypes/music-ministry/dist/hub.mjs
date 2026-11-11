@@ -178,21 +178,21 @@ async function restoreSelectedLocalBackup(file){
     if(file.size>BACKUP_MAX_BYTES)throw new Error('Selected backup file exceeds the size limit.');
     const envelope=JSON.parse(await file.text());
     const plan=planLocalRestore(localStorage,envelope); // Read-only inspection, no writes.
-    const summary='Local backup from '+plan.backupDate+'\\n'+plan.recordCount+
-      ' saved records, including '+plan.editorDraftCount+' unfinished editor draft(s).\\n';
+    const summary='Local backup from '+plan.backupDate+'\n'+plan.recordCount+
+      ' saved records, including '+plan.editorDraftCount+' unfinished editor draft(s).\n';
     if(!plan.safeToRestore){
-      alert(summary+'\\nThis browser origin already contains '+plan.existingKeys.length+
+      alert(summary+'\nThis browser origin already contains '+plan.existingKeys.length+
         ' Music Ministry storage key(s). Restore is blocked to prevent overwriting existing work.');
       return;
     }
-    if(!confirm(summary+'\\nRestore this file into the EMPTY Music Ministry storage on this localhost preview?'+
-      '\\nNo files are uploaded. Your other browser apps are unchanged. After restoring, this page reloads.'))return;
+    if(!confirm(summary+'\nRestore this file into the EMPTY Music Ministry storage on this localhost preview?'+
+      '\nNo files are uploaded. Your other browser apps are unchanged. After restoring, this page reloads.'))return;
     const result=restoreLocalBackupIntoEmptyStorage(localStorage,envelope);
     alert('Restored '+result.restoredRecords+' local records. The page will reload.');
     location.reload();
   }catch(error){
     alert('Local restore did not complete: '+(error?.message||'Invalid backup file')+
-      '\\nKeep the original backup. Do not clear browser storage.');
+      '\nKeep the original backup. Do not clear browser storage.');
   }
 }
 async function workshopAction(button){const action=button.dataset.action;if(!action?.startsWith('sx-'))return false;
