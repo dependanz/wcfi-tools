@@ -95,3 +95,18 @@ Test the backup schema/allowlist independently with:
 ```powershell
 node --test .\\prototypes\\music-ministry\\tests\\browser_backup.test.mjs
 ```
+
+
+## Inspect and restore into an empty isolated preview (Phase 3)
+
+The Song Catalogue offers **Inspect / restore**. It opens a local JSON file picker and checks a `wcfi-music-local-backup` v1 file entirely inside the browser; it never uploads the file. The preview shows its export date, record count and draft count before an explicit confirmation. **The restore is disabled on the normal `8816` preview and on non-loopback hosts.** Use a new loopback port (for example `8821`) for testing, where Music Ministry local storage is empty. The browser origin, including the port, determines which `localStorage` data is restored.
+
+Safeguards: reject invalid or oversized envelopes, non-ministry keys and duplicate keys; reject empty backups; refuse restoration if **any** Music Ministry storage key already exists at the destination, even one not present in the backup; never clear, overwrite, or touch unrelated keys. On a storage write error, the restore attempts to roll back all writes and reports if rollback could not be completed. After a successful restore the page reloads, allowing the original V19 loader to read the restored raw values. Invalid draft text is preserved rather than normalized.
+
+This is a **local preview recovery mechanism**, not the authenticated shared-store migration: it does not import into SQLite, resolve conflicts, provision member accounts, verify copyright permissions, or replace the private ministry snapshot. Retain the original backup and any existing browser data until separately verified; a failed rollback may require manual recovery. To confirm restored records independently, inspect another exported local backup from the destination, or use synthetic localStorage inspection. Do not test with real member data or deploy this code to Wix.
+
+Run the new unit tests:
+
+```powershell
+node --test .\\prototypes\\music-ministry\\tests\\browser_restore.test.mjs
+```
