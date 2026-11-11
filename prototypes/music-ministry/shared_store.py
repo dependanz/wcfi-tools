@@ -85,20 +85,24 @@ def validate_song(value: object) -> dict:
     return song
 
 
-def validate_lineup(value: object) -> dict:
+def validate_lineup(value: object, *, require_date: bool = False) -> dict:
     if not isinstance(value, dict):
         raise InvalidRecord("Lineup must be an object")
     _require_id(value.get("id"))
     title = value.get("title")
-    date = value.get("date")
+    date = value.get("date", "")
     if not isinstance(title, str) or not 1 <= len(title.strip()) <= 150:
         raise InvalidRecord("Lineup title required")
-    if not isinstance(date, str) or not DAY.fullmatch(date):
+    # V19 permits undated personal drafts; published plans must have a real date.
+    if not isinstance(date, str) or (require_date and not date):
         raise InvalidRecord("Lineup date required")
-    try:
-        datetime.strptime(date, "%Y-%m-%d")
-    except ValueError as exc:
-        raise InvalidRecord("Invalid calendar date") from exc
+    if date:
+        if not DAY.fullmatch(date):
+            raise InvalidRecord("Lineup date required")
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise InvalidRecord("Invalid calendar date") from exc
     items = value.get("songs")
     if not isinstance(items, list) or not 1 <= len(items) <= 60:
         raise InvalidRecord("Lineup needs songs")
@@ -324,7 +328,7 @@ class MusicStore:
             record = db.execute("SELECT payload FROM lineups WHERE id=?", (lineup_id,)).fetchone()
             if not record:
                 raise InvalidRecord("Lineup not found")
-            lineup = json.loads(record["payload"])
+            lineup = validate_lineup(json.loads(record["payload"]), require_date=True)
             for entry in lineup["songs"]:
                 song = db.execute("SELECT state FROM songs WHERE id=?", (entry["id"],)).fetchone()
                 if not song or song["state"] != "approved":
