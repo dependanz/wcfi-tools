@@ -65,3 +65,24 @@ To run synthetic tests from the repository root:
 ```
 
 Never upload real browser backups to a public Git repository, share them in CI logs, or automatically import them. If an owner chooses to inspect a personal backup locally, run the module only on that machine and keep outputs metadata-only. A future migration must map approved app memberships, preserve all arrangements and drafts, import transactionally, and provide independent round-trip verification before deleting or replacing local work.
+
+## Atomic private draft staging (synthetic development only)
+
+V19 allows saved personal lineups with an empty date. The shared domain now accepts `date: ""` for a **draft**; publication calls strict date validation and refuses an undated lineup. The read-only migration planner counts compatible undated lineups as *draft-staging candidates* and separately reports a `lineups:publication_date_required` hold. No date is invented.
+
+The isolated module `phase3_migration_stage.py` provides two explicit interfaces:
+
+- `prepare_v19_draft_stage(envelope)` validates a **limited subset** of complete V19 backups and returns only SHA-256 fingerprint and aggregate staging counts; it does not write.
+- `stage_v19_drafts(store, verified_admin, envelope, reviewed_sha256=..., confirmed=True)` performs a **single SQLite transaction**, requiring an approved application administrator, an exact matching reviewed digest, and explicit confirmation. Source songs and lineups are stored as *private drafts only*, never auto-approved or auto-published. On identifier conflicts, all inserts are rolled back, including earlier songs.
+
+This experimental stager is deliberately fail-closed: it supports only backups with exactly the current workshop and hub records, no unfinished editor drafts, no saved arrangements, no non-empty personal lineup draft, no legacy browser state, and no unresolved references. Unsupported data must be preserved in the original downloaded backup and handled by a later dedicated migration. It does not import browser-specific preferences, extra authoring fields, or archived local state, and therefore **is not a lossless production migration**. Do not delete existing browser records or treat this staging operation as final cutover.
+
+The trusted administrator subject **must** come from a verified server-side identity adapter; it cannot come from a browser header or form. No public HTTP route, sign-in flow, test user enrollment, credentials or Wix connection has been added. Existing V19 previews, localStorage, and the actual Wix website remain unchanged.
+
+Run only the synthetic tests on the development worktree:
+
+```powershell
+& .\.venv\Scripts\python.exe -m unittest discover -s .\prototypes\music-ministry\tests -p test_phase3_migration_stage.py -v
+```
+
+The migration planner continues to mark automatic production import unavailable because Wix identity/authorization mapping, rich arrangements, legacy state and verified cutover remain incomplete. Never submit real song content or raw local backups to CI or GitHub.
