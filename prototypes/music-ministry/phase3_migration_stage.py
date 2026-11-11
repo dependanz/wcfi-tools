@@ -13,7 +13,16 @@ import sqlite3
 from typing import Any
 
 from phase3_migration_plan import inspect_v19_backup
-from shared_store import InvalidRecord, MusicStore, NotAuthorized, VersionConflict, _json, _utc, validate_lineup, validate_song
+from shared_store import (
+    InvalidRecord,
+    MusicStore,
+    NotAuthorized,
+    VersionConflict,
+    _json,
+    _utc,
+    validate_lineup,
+    validate_song,
+)
 
 ALLOWED_SOURCE_KEYS = frozenset({"wcfi-song-workshop-v1", "wcfi-music-hub-v2"})
 
