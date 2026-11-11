@@ -38,30 +38,31 @@ class MigrationInspectionTests(unittest.TestCase):
         self.assertNotIn('Synthetic words',str(p.summary()))
         self.assertNotIn('not included in plan',str(p.summary()))
 
-    def test_missing_lineup_date_is_blocked_not_silently_filled(self):
+    def test_undated_lineup_is_ready_for_draft_staging_but_not_publication(self):
         l={'id':'lineup-test','title':'Test','date':'','songs':[{'id':'local-test','key':'G'}]}
         p=inspect_v19_backup(backup({'songs':[song()],'arrangements':{}},{'lineups':[l]}))
-        self.assertEqual((p.lineup_candidates,p.lineup_ready,p.lineup_blocked),(1,0,1))
-        self.assertIn('lineups:incompatible_lineup',p.blockers)
+        self.assertEqual((p.lineup_candidates,p.lineup_ready,p.lineup_blocked),(1,1,0))
+        self.assertEqual(p.undated_draft_lineups,1)
+        self.assertIn('lineups:publication_date_required',p.publication_holds)
+        self.assertNotIn('lineups:incompatible_lineup',p.blockers)
+        self.assertFalse(p.can_auto_import)
 
-    def test_missing_date_is_distinguished_from_invalid_date(self):
+    def test_invalid_calendar_date_still_blocks_lineup_staging(self):
         invalid = {'id':'lineup-test','title':'Fixture','date':'2026-99-99',
                    'songs':[{'id':'local-test','key':'G'}]}
-        missing = dict(invalid, date='')
-        for item, code in ((missing, 'lineups:missing_date'), (invalid, 'lineups:invalid_date')):
-            p = inspect_v19_backup(backup({'songs':[song()], 'arrangements':{}},
-                                         {'lineups':[item]}))
-            self.assertEqual(p.lineup_blocked, 1)
-            self.assertIn(code, p.blockers)
-            self.assertIn('lineups:incompatible_lineup', p.blockers)
+        p = inspect_v19_backup(backup({'songs':[song()], 'arrangements':{}},
+                                     {'lineups':[invalid]}))
+        self.assertEqual((p.lineup_ready,p.lineup_blocked), (0,1))
+        self.assertIn('lineups:invalid_date', p.blockers)
+        self.assertIn('lineups:incompatible_lineup', p.blockers)
 
     def test_missing_date_and_unresolved_reference_are_both_reported(self):
         item = {'id':'lineup-test','title':'Fixture','date':'',
                 'songs':[{'id':'demo-unavailable','key':'G'}]}
         p = inspect_v19_backup(backup({'songs':[song()],'arrangements':{}},
                                      {'lineups':[item]}))
-        self.assertIn('lineups:missing_date', p.blockers)
         self.assertIn('lineups:unresolved_song_reference', p.blockers)
+        self.assertNotIn('lineups:incompatible_lineup', p.blockers)
         self.assertEqual((p.lineup_ready, p.lineup_blocked), (0,1))
 
     def test_performance_key_issue_uses_only_category_without_private_song_id(self):
