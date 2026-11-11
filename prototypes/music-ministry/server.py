@@ -19,6 +19,7 @@ FILES = {
     "/ministry.mjs": ("ministry.mjs", "text/javascript; charset=utf-8"),
     "/ministry.css": ("ministry.css", "text/css; charset=utf-8"),
     "/lineups.mjs": ("lineups.mjs", "text/javascript; charset=utf-8"),
+    "/browser_backup.mjs": ("browser_backup.mjs", "text/javascript; charset=utf-8"),
     "/scene.mjs": ("scene.mjs", "text/javascript; charset=utf-8"),
     "/vendor/three.module.min.js": ("vendor/three.module.min.js", "text/javascript; charset=utf-8"),
     "/vendor/three.core.min.js": ("vendor/three.core.min.js", "text/javascript; charset=utf-8"),
