@@ -35,6 +35,8 @@ class MigrationPlan:
     lineup_blocked: int
     unfinished_editor_drafts: int
     arrangement_entries: int
+    undated_draft_lineups: int
+    publication_holds: tuple[str, ...]
     blockers: tuple[str, ...]
     can_auto_import: bool
 
@@ -85,8 +87,6 @@ def _lineup_blockers(lineup: Any, available_song_ids: set[str]) -> set[str]:
         validate_lineup(lineup)
     except (InvalidRecord, TypeError, KeyError) as exc:
         reason = _LINEUP_VALIDATION_REASONS.get(str(exc), 'incompatible_lineup')
-        if reason == 'invalid_date' and lineup.get('date') in (None, ''):
-            reason = 'missing_date'
         issues.update({'lineups:incompatible_lineup', 'lineups:' + reason})
     # Check references even if the validator stopped earlier at a missing date.
     items = lineup.get('songs')
@@ -162,6 +162,7 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
         blockers.append('hub:lineups_not_list')
         lineup_items = []
     ready_lineups = 0
+    undated_lineups = 0
     for lineup in lineup_items:
         if isinstance(lineup, dict) and lineup.get('demo') is True:
             # Demo lineups are not ministry records and must never be migrated.
@@ -171,6 +172,8 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
             blockers.extend(sorted(issues))
         else:
             ready_lineups += 1
+            if not lineup.get('date'):
+                undated_lineups += 1
     real_lineups = sum(not (isinstance(x, dict) and x.get('demo') is True) for x in lineup_items)
     draft = hub.get('draft')
     if isinstance(draft, dict) and any(draft.get(k) for k in ('title', 'notes', 'date', 'songs')):
@@ -184,9 +187,11 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
         blockers.append('legacy:state_requires_review')
     blockers.append('migration:approval_mapping_not_implemented')
     blockers.append('migration:atomic_import_not_implemented')
+    publication_holds = ('lineups:publication_date_required',) if undated_lineups else ()
     return MigrationPlan(FORMAT, 1, len(rows), len(songs), ready_songs,
                          len(songs)-ready_songs, real_lineups, ready_lineups,
                          real_lineups-ready_lineups, draft_count, arrangement_count,
+                         undated_lineups, publication_holds,
                          tuple(sorted(set(blockers))), False)
 
 
