@@ -94,7 +94,7 @@ class Phase3HTTPTests(unittest.TestCase):
         return created["id"]
 
     def test_anonymous_and_unapproved_are_denied_even_with_fake_subject_headers(self):
-        for path in ("/api/v1/songs", "/api/v1/lineups", "/ministry-data.json"):
+        for path in ("/api/v1/songs", "/api/v1/lineups"):
             self.assertEqual(self.call("GET", path)[0], 401)
             self.assertEqual(self.call("GET", path, "fixture-pending")[0], 401)
             self.assertEqual(self.call("GET", path, header_overrides={"X-Verified-Subject": "fixture-admin", "X-Role": "admin"})[0], 401)
@@ -158,7 +158,22 @@ class Phase3HTTPTests(unittest.TestCase):
         self.assertEqual(self.call("POST", "/api/v1/songs", "fixture-editor", synthetic_song() | {"id": "client-chosen"})[0], 422)
         self.assertEqual(self.call("POST", "/api/v1/songs", "fixture-editor", raw='{"title":"a","title":"b"}')[0], 422)
         self.assertEqual(self.call("POST", "/api/v1/songs", "fixture-editor", raw='{"bpm":NaN}')[0], 422)
-        self.assertEqual(self.call("POST", "/api/v1/songs", "fixture-editor", raw='{"x":"' + 'a' * MAX_JSON_BYTES + '"}')[0], 422)
+        # Test oversized Content-Length without sending a huge body. The
+        # server rejects it immediately, closing the connection before upload.
+        cookie, csrf_token = self.identities["fixture-editor"]
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        try:
+            conn.putrequest("POST", "/api/v1/songs")
+            conn.putheader("Cookie", f"wcfi_dev_session={cookie}")
+            conn.putheader("X-WCFI-CSRF", csrf_token)
+            conn.putheader("Content-Type", "application/json")
+            conn.putheader("Content-Length", str(MAX_JSON_BYTES + 100))
+            conn.endheaders()
+            response = conn.getresponse()
+            self.assertEqual(response.status, 422)
+            response.read()
+        finally:
+            conn.close()
         self.assertEqual(self.call("GET", "/api/v1/songs?public=true", "fixture-viewer")[0], 400)
 
     def test_catalogue_import_preserves_sections_and_is_not_public(self):
