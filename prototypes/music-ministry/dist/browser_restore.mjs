@@ -51,9 +51,10 @@ export function restoreLocalBackupIntoEmptyStorage(storage, envelope) {
       if (storage.getItem(row.key) !== null) {
         throw new Error('Destination changed during restore.');
       }
+      // Register intent before writing, since a storage adapter may write then throw.
+      written.push(row.key);
       storage.setItem(row.key, row.value);
       // Treat a write that reports success but does not persist as a failure.
-      written.push(row.key);
       if (storage.getItem(row.key) !== row.value) {
         throw new Error('Browser storage did not retain a restored record.');
       }
