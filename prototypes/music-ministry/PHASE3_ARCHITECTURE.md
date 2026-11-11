@@ -52,3 +52,16 @@ No server starts, no network calls occur, no Wix settings change, and databases 
 - https://www.worshiptools.com/en-us/planning
 - https://support.proclaim.logos.com/hc/en-us/articles/19864373315341-What-is-Proclaim-Music
 - https://www.logos.com/grow/faithlife-strategic-direction-moving-forward/
+## V19 migration compatibility preflight (read-only)
+
+The `phase3_migration_plan.py` module inspects versioned `wcfi-music-local-backup` v1 envelopes and reports only aggregate counts and categorical blockers; song lyrics, chart lines, notes and titles are not included in reports. It does not write to SQLite, modify browser storage, start an HTTP server or contact Wix. It deliberately **never declares automatic migration ready**.
+
+Compatibility gaps are explicit: browser-local lineups may have no service date, may refer to demo or private-snapshot-only song IDs, and may contain service-specific arrangements not yet modeled in the shared store. Invalid/incomplete song editor drafts, the current unsaved lineup draft, and legacy browser state require separate handling. Demo lineups are excluded. The planner validates authorable songs against the existing shared-store schema and flags incomplete or incompatible records instead of inventing missing keys, dates, identities, or permissions.
+
+To run synthetic tests from the repository root:
+
+```powershell
+& .\.venv\Scripts\python.exe -m unittest discover -s .\prototypes\music-ministry\tests -p test_phase3_migration_plan.py -v
+```
+
+Never upload real browser backups to a public Git repository, share them in CI logs, or automatically import them. If an owner chooses to inspect a personal backup locally, run the module only on that machine and keep outputs metadata-only. A future migration must map approved app memberships, preserve all arrangements and drafts, import transactionally, and provide independent round-trip verification before deleting or replacing local work.
