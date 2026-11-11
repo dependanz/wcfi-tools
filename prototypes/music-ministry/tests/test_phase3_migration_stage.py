@@ -115,6 +115,56 @@ class MigrationStageTests(unittest.TestCase):
         published = self.store.list_lineups("fixture-viewer")[0]
         self.assertEqual((published["date"], published["state"]), ("2026-11-15", "published"))
 
+    def test_bundled_demo_is_reported_and_excluded_without_losing_real_draft(self):
+        demo = {
+            "id": "demo-sunday", "title": "Sunday worship", "date": "",
+            "notes": "Synthetic example only", "songs": [
+                {"id": "built-in-demo-only", "key": "G"},
+            ],
+            "updated": 0, "demo": True,
+        }
+        doc = backup(lineups=[demo, lineup()])
+        original = json.dumps(doc, sort_keys=True)
+        preview = prepare_v19_draft_stage(doc)
+        self.assertEqual((preview["songs_to_stage"], preview["lineups_to_stage"]), (1, 1))
+        self.assertEqual(preview["demo_lineups_excluded"], 1)
+        self.assertEqual(preview["undated_lineups"], 1)
+        self.assertEqual(original, json.dumps(doc, sort_keys=True))
+        result = self._stage(doc)
+        self.assertEqual(result["demo_lineups_excluded"], 1)
+        self.assertEqual(result["lineups_staged"], 1)
+        saved = self.store.list_lineups("fixture-admin")
+        self.assertEqual([item["id"] for item in saved], ["local-service"])
+        self.assertEqual(saved[0]["state"], "draft")
+        self.assertEqual(self.store.list_lineups("fixture-viewer"), [])
+
+    def test_malformed_or_unknown_demo_is_not_silently_excluded(self):
+        unknown = {
+            "id": "private-might-be-user-created", "demo": True, "title": "Private",
+            "date": "", "notes": "", "songs": [],
+        }
+        invalid = {"id": "demo-sunday", "demo": True, "songs": "not a list"}
+        scenarios = [
+            backup(lineups=[unknown, lineup()]),
+            backup(lineups=[invalid, lineup()]),
+            backup(lineups=[unknown | {"demo": False}, lineup()]),
+            backup(lineups=[invalid | {"demo": False}, lineup()]),
+        ]
+        for doc in scenarios:
+            with self.subTest(data=doc["records"][1]["value"][:30]):
+                with self.assertRaises((InvalidRecord, ValueError, TypeError)):
+                    prepare_v19_draft_stage(doc)
+                self.assertEqual(self.store.list_lineups("fixture-admin"), [])
+                self.assertEqual(self.store.list_songs("fixture-admin"), [])
+
+    def test_duplicate_bundled_demo_requires_review(self):
+        demo = {
+            "id": "demo-sunday", "title": "Sunday worship", "date": "",
+            "notes": "fixture", "songs": [], "demo": True,
+        }
+        with self.assertRaises(InvalidRecord):
+            prepare_v19_draft_stage(backup(lineups=[demo, demo, lineup()]))
+
     def test_explicit_approval_digest_and_roles_are_enforced(self):
         doc = backup()
         checked = prepare_v19_draft_stage(doc)["source_sha256"]
