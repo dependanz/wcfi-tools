@@ -63,6 +63,41 @@ def _json_object(raw: str) -> dict:
     return result
 
 
+_LINEUP_VALIDATION_REASONS = {
+    'Expected stable lowercase identifier': 'invalid_identifier',
+    'Lineup title required': 'invalid_title',
+    'Lineup date required': 'invalid_date',
+    'Invalid calendar date': 'invalid_date',
+    'Lineup needs songs': 'invalid_song_list',
+    'Invalid lineup song': 'invalid_song_entry',
+    'Invalid performance key': 'invalid_performance_key',
+    'Invalid arrangement sequence': 'invalid_arrangement',
+    'Invalid lineup notes': 'invalid_notes',
+}
+
+
+def _lineup_blockers(lineup: Any, available_song_ids: set[str]) -> set[str]:
+    """Only categorical diagnostics: never echo titles, lyrics, IDs or private notes."""
+    if not isinstance(lineup, dict):
+        return {'lineups:invalid_record', 'lineups:incompatible_lineup'}
+    issues: set[str] = set()
+    try:
+        validate_lineup(lineup)
+    except (InvalidRecord, TypeError, KeyError) as exc:
+        reason = _LINEUP_VALIDATION_REASONS.get(str(exc), 'incompatible_lineup')
+        if reason == 'invalid_date' and lineup.get('date') in (None, ''):
+            reason = 'missing_date'
+        issues.update({'lineups:incompatible_lineup', 'lineups:' + reason})
+    # Check references even if the validator stopped earlier at a missing date.
+    items = lineup.get('songs')
+    if isinstance(items, list) and any(
+        isinstance(entry, dict) and isinstance(entry.get('id'), str) and
+        entry['id'] not in available_song_ids for entry in items
+    ):
+        issues.add('lineups:unresolved_song_reference')
+    return issues
+
+
 def inspect_v19_backup(envelope: Any) -> MigrationPlan:
     """Inspect-only. Invalid backup envelopes raise; incompatible content is reported."""
     if not isinstance(envelope, dict) or envelope.get('format') != FORMAT or type(envelope.get('version')) is not int or envelope['version'] != 1 or envelope.get('scope') != 'browser-local-only':
@@ -131,14 +166,11 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
         if isinstance(lineup, dict) and lineup.get('demo') is True:
             # Demo lineups are not ministry records and must never be migrated.
             continue
-        try:
-            cleaned = validate_lineup(lineup)
-            if any(item['id'] not in song_ids for item in cleaned['songs']):
-                blockers.append('lineups:unresolved_song_reference')
-            else:
-                ready_lineups += 1
-        except (InvalidRecord, TypeError, KeyError):
-            blockers.append('lineups:incompatible_lineup')
+        issues = _lineup_blockers(lineup, song_ids)
+        if issues:
+            blockers.extend(sorted(issues))
+        else:
+            ready_lineups += 1
     real_lineups = sum(not (isinstance(x, dict) and x.get('demo') is True) for x in lineup_items)
     draft = hub.get('draft')
     if isinstance(draft, dict) and any(draft.get(k) for k in ('title', 'notes', 'date', 'songs')):

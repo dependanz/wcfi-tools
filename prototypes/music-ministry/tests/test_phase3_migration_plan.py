@@ -44,6 +44,36 @@ class MigrationInspectionTests(unittest.TestCase):
         self.assertEqual((p.lineup_candidates,p.lineup_ready,p.lineup_blocked),(1,0,1))
         self.assertIn('lineups:incompatible_lineup',p.blockers)
 
+    def test_missing_date_is_distinguished_from_invalid_date(self):
+        invalid = {'id':'lineup-test','title':'Fixture','date':'2026-99-99',
+                   'songs':[{'id':'local-test','key':'G'}]}
+        missing = dict(invalid, date='')
+        for item, code in ((missing, 'lineups:missing_date'), (invalid, 'lineups:invalid_date')):
+            p = inspect_v19_backup(backup({'songs':[song()], 'arrangements':{}},
+                                         {'lineups':[item]}))
+            self.assertEqual(p.lineup_blocked, 1)
+            self.assertIn(code, p.blockers)
+            self.assertIn('lineups:incompatible_lineup', p.blockers)
+
+    def test_missing_date_and_unresolved_reference_are_both_reported(self):
+        item = {'id':'lineup-test','title':'Fixture','date':'',
+                'songs':[{'id':'demo-unavailable','key':'G'}]}
+        p = inspect_v19_backup(backup({'songs':[song()],'arrangements':{}},
+                                     {'lineups':[item]}))
+        self.assertIn('lineups:missing_date', p.blockers)
+        self.assertIn('lineups:unresolved_song_reference', p.blockers)
+        self.assertEqual((p.lineup_ready, p.lineup_blocked), (0,1))
+
+    def test_performance_key_issue_uses_only_category_without_private_song_id(self):
+        item = {'id':'lineup-test','title':'Secret title','date':'2026-11-15',
+                'songs':[{'id':'local-test','key':'Hmaj7'}], 'notes':'SECRET NOTE'}
+        p = inspect_v19_backup(backup({'songs':[song()],'arrangements':{}},
+                                     {'lineups':[item]}))
+        self.assertIn('lineups:invalid_performance_key', p.blockers)
+        report = str(p.summary())
+        for secret in ('Secret title', 'SECRET NOTE', 'Hmaj7', 'local-test'):
+            self.assertNotIn(secret, report)
+
     def test_demo_lineups_are_not_import_candidates(self):
         p=inspect_v19_backup(backup(hub={'lineups':[{'id':'demo-sunday','demo':True,'title':'Example'}]}))
         self.assertEqual(p.lineup_candidates,0)
