@@ -162,7 +162,7 @@ function downloadLocalWorkBackup(){
   try{
     const snapshot=captureLocalBackup(localStorage),details=inspectLocalBackup(snapshot);
     if(!details.recordCount){notify('No browser-local Music Ministry data to back up.');return;}
-    const blob=new Blob([JSON.stringify(snapshot,null,2)+'\\n'],{type:'application/json;charset=utf-8'});
+    const blob=new Blob([JSON.stringify(snapshot,null,2)+'\n'],{type:'application/json;charset=utf-8'});
     const url=URL.createObjectURL(blob),link=document.createElement('a');
     link.href=url;link.download='wcfi-local-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(link);
     try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
