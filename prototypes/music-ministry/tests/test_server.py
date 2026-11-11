@@ -29,6 +29,10 @@ def test_private_endpoint_is_bounded_and_uncacheable(tmp_path):
             assert response.status == 200
             assert "text/javascript" in response.headers["Content-Type"]
             assert b"captureLocalBackup" in response.read()
+        with request("/browser_restore.mjs") as response:
+            assert response.status == 200
+            assert "text/javascript" in response.headers["Content-Type"]
+            assert b"restoreLocalBackupIntoEmptyStorage" in response.read()
         with request("/ministry-data.json") as response:
             assert response.status == 200
             assert response.headers["Cache-Control"] == "no-store"
