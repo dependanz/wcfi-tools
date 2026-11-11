@@ -75,9 +75,25 @@ class MigrationInspectionTests(unittest.TestCase):
         for secret in ('Secret title', 'SECRET NOTE', 'Hmaj7', 'local-test'):
             self.assertNotIn(secret, report)
 
-    def test_demo_lineups_are_not_import_candidates(self):
-        p=inspect_v19_backup(backup(hub={'lineups':[{'id':'demo-sunday','demo':True,'title':'Example'}]}))
-        self.assertEqual(p.lineup_candidates,0)
+    def test_known_demo_is_excluded_and_counted(self):
+        demo={'id':'demo-sunday','demo':True,'title':'Sunday worship',
+              'date':'','notes':'example','songs':[{'id':'demo-only','key':'G'}]}
+        valid={'id':'lineup-test','title':'Test','date':'',
+               'songs':[{'id':'local-test','key':'G'}]}
+        p=inspect_v19_backup(backup({'songs':[song()],'arrangements':{}},
+                                    {'lineups':[demo,valid]}))
+        self.assertEqual((p.lineup_candidates,p.lineup_ready,p.lineup_blocked),(1,1,0))
+        self.assertEqual(p.demo_lineups_excluded,1)
+        self.assertEqual(p.undated_draft_lineups,1)
+        self.assertFalse(p.can_auto_import)
+
+    def test_unrecognized_demo_is_not_silently_ignored(self):
+        item={'id':'unknown-demo','demo':True,'title':'Maybe personal',
+              'date':'','notes':'keep','songs':[]}
+        p=inspect_v19_backup(backup(hub={'lineups':[item]}))
+        self.assertEqual((p.lineup_candidates,p.lineup_ready,p.lineup_blocked),(1,0,1))
+        self.assertEqual(p.demo_lineups_excluded,0)
+        self.assertIn('lineups:unrecognized_demo',p.blockers)
 
     def test_external_reference_and_arrangement_are_explicitly_blocked(self):
         l={'id':'lineup-test','title':'Test','date':'2026-11-15','songs':[{'id':'not-present','key':'G'}]}

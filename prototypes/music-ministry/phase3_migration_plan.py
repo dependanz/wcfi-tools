@@ -20,6 +20,21 @@ KEYS = frozenset({'wcfi-music-hub-v2', 'wcfi-song-workshop-v1',
 DRAFT_PREFIX = 'wcfi-song-editor-draft-v1:'
 MAX_BYTES = 8 * 1024 * 1024
 MAX_RECORDS = 600
+KNOWN_V19_DEMO_ID = "demo-sunday"
+
+
+def is_known_v19_demo_lineup(value: Any) -> bool:
+    """Only the bundled, recognizable V19 example may be excluded from staging."""
+    return (
+        isinstance(value, dict)
+        and value.get("demo") is True
+        and value.get("id") == KNOWN_V19_DEMO_ID
+        and isinstance(value.get("title"), str)
+        and isinstance(value.get("songs"), list)
+        and isinstance(value.get("date"), str)
+        and isinstance(value.get("notes"), str)
+    )
+
 
 
 @dataclass(frozen=True)
@@ -36,6 +51,7 @@ class MigrationPlan:
     unfinished_editor_drafts: int
     arrangement_entries: int
     undated_draft_lineups: int
+    demo_lineups_excluded: int
     publication_holds: tuple[str, ...]
     blockers: tuple[str, ...]
     can_auto_import: bool
@@ -163,9 +179,14 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
         lineup_items = []
     ready_lineups = 0
     undated_lineups = 0
+    demo_excluded = 0
     for lineup in lineup_items:
-        if isinstance(lineup, dict) and lineup.get('demo') is True:
-            # Demo lineups are not ministry records and must never be migrated.
+        if isinstance(lineup, dict) and lineup.get("demo") is True:
+            if is_known_v19_demo_lineup(lineup):
+                # Exclude only the bundled demo fixture; the source backup is retained.
+                demo_excluded += 1
+            else:
+                blockers.append("lineups:unrecognized_demo")
             continue
         issues = _lineup_blockers(lineup, song_ids)
         if issues:
@@ -174,7 +195,9 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
             ready_lineups += 1
             if not lineup.get('date'):
                 undated_lineups += 1
-    real_lineups = sum(not (isinstance(x, dict) and x.get('demo') is True) for x in lineup_items)
+    if demo_excluded > 1:
+        blockers.append("lineups:duplicate_bundled_demo")
+    real_lineups = len(lineup_items) - demo_excluded
     draft = hub.get('draft')
     if isinstance(draft, dict) and any(draft.get(k) for k in ('title', 'notes', 'date', 'songs')):
         blockers.append('draft:local_lineup_requires_separate_migration')
@@ -191,7 +214,7 @@ def inspect_v19_backup(envelope: Any) -> MigrationPlan:
     return MigrationPlan(FORMAT, 1, len(rows), len(songs), ready_songs,
                          len(songs)-ready_songs, real_lineups, ready_lineups,
                          real_lineups-ready_lineups, draft_count, arrangement_count,
-                         undated_lineups, publication_holds,
+                         undated_lineups, demo_excluded, publication_holds,
                          tuple(sorted(set(blockers))), False)
 
 

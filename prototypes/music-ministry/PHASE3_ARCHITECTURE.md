@@ -86,3 +86,9 @@ Run only the synthetic tests on the development worktree:
 ```
 
 The migration planner continues to mark automatic production import unavailable because Wix identity/authorization mapping, rich arrangements, legacy state and verified cutover remain incomplete. Never submit real song content or raw local backups to CI or GitHub.
+
+## Bundled demo lineup compatibility (Phase 3)
+
+The read-only preflight and synthetic draft stager now agree on the V19 **bundled demo fixture** (`id = "demo-sunday"`, `demo = true` with a recognizable lineup shape). It is not a user-authored ministry service and must **not** become a published or draft shared ministry lineup. The planner reports `demo_lineups_excluded` and counts all other lineups; the staging preview and result also report this number. Unknown or malformed demo rows are **not silently skipped**; they require review. All records remain intact in the original downloaded browser backup.
+
+The fix resolves a mismatch where the planner excluded the bundled demo but the stager rejected any backup containing it. No source data is deleted or edited. This is still a development-only, opt-in, admin-gated staging component. It does not preserve every browser preference or provide complete production cutover, and no real owner data or current browser session is staged by this branch.
