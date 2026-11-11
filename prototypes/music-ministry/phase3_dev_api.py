@@ -117,7 +117,7 @@ def make_handler(store: MusicStore, sessions: SyntheticSessionAuthority):
         sys_version = ""
         protocol_version = "HTTP/1.0"  # Close after every response, including rejected bodies.
 
-        def log_message(self, format: str, *args):  # noqa: A002
+        def log_message(self, format: str, *args):
             # Do not accidentally log session cookies, lyric content, or query strings.
             return
 
@@ -147,9 +147,7 @@ def make_handler(store: MusicStore, sessions: SyntheticSessionAuthority):
             if self.headers.get("Sec-Fetch-Site") == "cross-site":
                 return False
             origin = self.headers.get("Origin")
-            if origin is not None and origin not in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}:
-                return False
-            return True
+            return origin is None or origin in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
 
         def _principal(self, mutating: bool = False) -> str | None:
             if not self._origin_ok():
@@ -180,7 +178,7 @@ def make_handler(store: MusicStore, sessions: SyntheticSessionAuthority):
             raw = self.rfile.read(size)
             result = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_pairs, parse_constant=_reject_nonfinite)
             if not isinstance(result, dict):
-                raise ValueError("JSON object required")
+                raise TypeError("JSON object required")
             return result
 
         def _handle(self, mutating: bool) -> None:
@@ -264,7 +262,7 @@ def make_handler(store: MusicStore, sessions: SyntheticSessionAuthority):
                 self._error(HTTPStatus.FORBIDDEN, "not_authorized")
             except VersionConflict:
                 self._error(HTTPStatus.CONFLICT, "version_conflict")
-            except (InvalidRecord, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+            except (InvalidRecord, ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
                 self._error(HTTPStatus.UNPROCESSABLE_ENTITY, "invalid_record")
 
         def do_GET(self) -> None:
