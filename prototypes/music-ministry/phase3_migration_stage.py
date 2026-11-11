@@ -12,7 +12,7 @@ import json
 import sqlite3
 from typing import Any
 
-from phase3_migration_plan import inspect_v19_backup
+from phase3_migration_plan import inspect_v19_backup, is_known_v19_demo_lineup
 from shared_store import (
     InvalidRecord,
     MusicStore,
@@ -44,7 +44,7 @@ def _canonical_bytes(envelope: dict) -> bytes:
         raise InvalidRecord("Invalid backup JSON values") from exc
 
 
-def _validated_parts(envelope: object) -> tuple[list[dict], list[dict], str]:
+def _validated_parts(envelope: object) -> tuple[list[dict], list[dict], str, int]:
     """Fail closed on any unmodeled browser state; return only validated records."""
     plan = inspect_v19_backup(envelope)
     if plan.record_count != 2 or plan.song_blocked or plan.lineup_blocked:
@@ -69,30 +69,35 @@ def _validated_parts(envelope: object) -> tuple[list[dict], list[dict], str]:
     raw_lineups = hub.get("lineups")
     if not isinstance(raw_songs, list) or not isinstance(raw_lineups, list):
         raise InvalidRecord("Missing song or lineup list")
-    if any(not isinstance(x, dict) or x.get("demo") is True for x in raw_lineups):
-        raise InvalidRecord("Demo or malformed lineups require separate review")
+    if any(not isinstance(x, dict) for x in raw_lineups):
+        raise InvalidRecord("Malformed lineup entries require separate review")
+    demos = [item for item in raw_lineups if item.get("demo") is True]
+    if len(demos) > 1 or any(not is_known_v19_demo_lineup(item) for item in demos):
+        raise InvalidRecord("Unrecognized or duplicate demo lineup requires review")
+    real_lineups = [item for item in raw_lineups if item.get("demo") is not True]
     draft = hub.get("draft", {})
     if not isinstance(draft, dict) or any(draft.get(k) for k in ("title", "date", "notes", "songs")):
         raise InvalidRecord("Incomplete personal lineup draft requires separate migration")
     songs = [validate_song(item) for item in raw_songs]
-    lineups = [validate_lineup(item) for item in raw_lineups]
+    lineups = [validate_lineup(item) for item in real_lineups]
     song_ids = [item["id"] for item in songs]
     lineup_ids = [item["id"] for item in lineups]
     if len(set(song_ids)) != len(song_ids) or len(set(lineup_ids)) != len(lineup_ids):
         raise InvalidRecord("Duplicate source record identifiers")
     if any(entry["id"] not in set(song_ids) for item in lineups for entry in item["songs"]):
         raise InvalidRecord("Lineup references a song absent from this backup")
-    return songs, lineups, hashlib.sha256(_canonical_bytes(envelope)).hexdigest()
+    return songs, lineups, hashlib.sha256(_canonical_bytes(envelope)).hexdigest(), len(demos)
 
 
 def prepare_v19_draft_stage(envelope: object) -> dict:
     """Read-only preview. No contents, identifiers, lyrics or private notes returned."""
-    songs, lineups, digest = _validated_parts(envelope)
+    songs, lineups, digest, excluded_demos = _validated_parts(envelope)
     return {
         "source_sha256": digest,
         "songs_to_stage": len(songs),
         "lineups_to_stage": len(lineups),
         "undated_lineups": sum(item["date"] == "" for item in lineups),
+        "demo_lineups_excluded": excluded_demos,
         "target_state": "draft_only",
         "approved_or_published": 0,
     }
@@ -109,7 +114,7 @@ def stage_v19_drafts(
     """
     if confirmed is not True:
         raise NotAuthorized("Explicit staging confirmation required")
-    songs, lineups, digest = _validated_parts(envelope)
+    songs, lineups, digest, excluded_demos = _validated_parts(envelope)
     if not isinstance(reviewed_sha256, str) or not hmac.compare_digest(reviewed_sha256, digest):
         raise VersionConflict("The inspected backup has changed; review it again")
     with store._connection() as db:
@@ -134,5 +139,6 @@ def stage_v19_drafts(
         "source_sha256": digest,
         "songs_staged": len(songs),
         "lineups_staged": len(lineups),
+        "demo_lineups_excluded": excluded_demos,
         "target_state": "draft_only",
     }
