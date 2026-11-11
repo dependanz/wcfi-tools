@@ -36,7 +36,8 @@ jobs:
             prototypes/music-ministry/tests/chords.test.mjs \
             prototypes/music-ministry/tests/lineups.test.mjs \
             prototypes/music-ministry/tests/ministry.test.mjs \
-            prototypes/music-ministry/tests/song-export.test.mjs
+            prototypes/music-ministry/tests/song-export.test.mjs \
+            prototypes/music-ministry/tests/browser_backup.test.mjs
       - name: Chord Converter JavaScript tests
         run: node --test prototypes/chord-converter/tests/converter.test.mjs
 

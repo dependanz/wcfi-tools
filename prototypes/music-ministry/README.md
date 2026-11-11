@@ -82,3 +82,16 @@ V19: valid song edits automatically update the local chart; invalid edits remain
 Song-view simplification: catalogue viewing/editing and transposition remain; Add to line-up and Slide-maker view are removed. Add songs through Line-up Maker. Existing per-line-up arrangements remain available in service context.
 
 Song export: Song Catalogue → Export all songs downloads the full saved visible catalogue regardless of search filters. Edit song → Export song downloads the current validated song; fix errors before exporting. Files use versioned wcfi-song-catalogue JSON with song details, section order, lyrics/chords and sequence. No import, uploads, line-up arrangements or invalid drafts are included. Export from the browser/device where the songs were authored.
+
+
+## Full browser-local backup (Phase 3 migration safety)
+
+The Song Catalogue now offers **Backup local work** alongside the existing song-only export. This explicitly downloads a JSON file named `wcfi-local-backup-YYYY-MM-DD.json`, after a warning that it contains potentially private notes and song content. The backup preserves the **raw browser-local storage values** for current personal lineups and drafts (`wcfi-music-hub-v2`), locally edited songs and per-service arrangements (`wcfi-song-workshop-v1`), unfinished/invalid editor drafts (`wcfi-song-editor-draft-v1:*`), the last-editor pointer, and the legacy `wcfi-music-preview-v1` key when present. It excludes unrelated browser keys, any OAuth/session tokens stored under different names, and the private read-only server snapshot. It does not automatically upload data to any service or modify browser storage.
+
+**Keep the downloaded file private.** Confirm that the file exists and is retained before deleting browser storage or migrating to a shared account. An initiated download is not proof the browser saved it. There is no automatic restore/import of this full backup yet; that must be implemented and tested separately before migration. The existing song-only export is unchanged and can still be used when only validated charts are needed. This preview and its backup are not integrated with Wix Members; the public website is unchanged.
+
+Test the backup schema/allowlist independently with:
+
+```powershell
+node --test .\\prototypes\\music-ministry\\tests\\browser_backup.test.mjs
+```
