@@ -171,6 +171,12 @@ class MusicStore:
                 record_id TEXT NOT NULL,
                 at TEXT NOT NULL
               );
+              CREATE TABLE IF NOT EXISTS migration_source_archives (
+                source_sha256 TEXT PRIMARY KEY,
+                canonical_backup BLOB NOT NULL,
+                owner TEXT NOT NULL REFERENCES members(subject),
+                created_at TEXT NOT NULL
+              );
             """)
 
     @staticmethod
