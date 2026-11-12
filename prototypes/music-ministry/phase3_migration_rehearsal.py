@@ -20,6 +20,7 @@ from phase3_migration_stage import (
     _no_duplicate_fields,
     _validated_parts,
     prepare_v19_draft_stage,
+    read_v19_source_archive,
     stage_v19_drafts,
 )
 from shared_store import MusicStore
@@ -91,6 +92,20 @@ def rehearse_v19_envelope(envelope: dict) -> dict:
             reviewed_sha256=digest, confirmed=True,
         )
         _verify_rows(store, expected_songs, expected_lineups)
+        # Verify that the complete original logical backup is recoverable,
+        # not just normalized songs/lineups. This includes private browser
+        # preferences, raw storage strings and the excluded demo lineup.
+        archived = read_v19_source_archive(store, _FIXTURE_ADMIN, digest)
+        if archived != envelope:
+            raise RehearsalFailed("Full browser source archive round-trip mismatch")
+        with store._connection() as db:
+            archived_row = db.execute(
+                "SELECT COUNT(*), owner FROM migration_source_archives "
+                "WHERE source_sha256=?",
+                (digest,),
+            ).fetchone()
+            if archived_row[0] != 1 or archived_row[1] != _FIXTURE_ADMIN:
+                raise RehearsalFailed("Source archive count or ownership mismatch")
         if staged["songs_staged"] != len(expected_songs) or (
             staged["lineups_staged"] != len(expected_lineups)
         ) or staged["demo_lineups_excluded"] != demos:
@@ -107,6 +122,8 @@ def rehearse_v19_envelope(envelope: dict) -> dict:
         "member_visibility": "none",
         "published_records": 0,
         "normalized_domain_records_match": True,
+        "complete_browser_backup_archived_and_verified": True,
+        "archive_contains_excluded_demo_and_raw_storage": True,
         "browser_specific_fields_migrated": False,
         "lossless_production_migration": False,
         "temporary_database_removed": True,
