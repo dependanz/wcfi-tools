@@ -81,6 +81,8 @@ class DisposableRehearsalTests(unittest.TestCase):
         self.assertEqual(result["published_records"], 0)
         self.assertEqual(result["member_visibility"], "none")
         self.assertTrue(result["normalized_domain_records_match"])
+        self.assertTrue(result["complete_browser_backup_archived_and_verified"])
+        self.assertTrue(result["archive_contains_excluded_demo_and_raw_storage"])
         self.assertTrue(result["temporary_database_removed"])
         self.assertFalse(result["lossless_production_migration"])
         self.assertFalse(result["browser_specific_fields_migrated"])
