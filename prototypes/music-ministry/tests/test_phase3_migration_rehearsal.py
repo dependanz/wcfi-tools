@@ -115,9 +115,8 @@ class DisposableRehearsalTests(unittest.TestCase):
                              "date": "", "notes": "", "songs": []}, _lineup()]),
             backup(lineups=[_demo(), _lineup(song_id="not-exported")]),
         ):
-            with self.subTest():
-                with self.assertRaises(InvalidRecord):
-                    rehearse_v19_envelope(doc)
+            with self.subTest(), self.assertRaises(InvalidRecord):
+                rehearse_v19_envelope(doc)
 
     def test_unfinished_editor_draft_is_not_discarded(self):
         doc = backup(extra=[{
