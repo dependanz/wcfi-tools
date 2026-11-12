@@ -112,3 +112,18 @@ Run with a private development backup from a checked-out worktree using Python 3
 The utility offers **no option to target an existing database**. It temporarily writes normalized private content to a local disposable *unencrypted* SQLite file; run only on a machine you trust. It does not print charts or notes. Keep the original backup private.
 
 **This is not a lossless production migration.** Domain validators project source data onto a narrower backend schema. Browser preferences and supplementary per-record fields are not transferred to normalized records. The original downloaded backup remains authoritative. Durable archival or mapping, real identity and access control, and production rollback require separate implementation and testing. The WCFI Wix website remains untouched until Phase 6.
+
+## Private full-source archive in the disposable rehearsal
+
+The rehearsal now stores the **entire validated browser backup envelope** as a private SQLite BLOB **in the same transaction** as normalized song/lineup drafts. This includes each verbatim `localStorage` value, original browser preferences, excluded demo record, and supplementary source fields that the normalized database intentionally does not model. SHA-256 ties this archival representation to the reviewed staging fingerprint.
+
+The source archive is **logically lossless for the parsed JSON backup**, not byte-for-byte identical to the downloaded file (outer JSON whitespace, file BOM and formatting are canonicalized). The original file's separate byte-level SHA-256 check remains in the local rehearsal. No real account or Wix site is accessed.
+
+- The archive table is `migration_source_archives`, keyed by the canonical source hash and owned by the staging administrator. It is not exposed through the existing HTTP API.
+- `read_v19_source_archive(store, verified_admin, digest)` is an internal admin-authorized readback which verifies the stored payload hash before returning the complete backup object. Do **not** expose its output to ordinary members, API clients, logs, or public builds.
+- Duplicate source hashes, song IDs, lineup IDs, or failed writes must roll back the **entire** transaction, including the archived backup. Tests verify conflicting lineup inserts leave no orphan archive.
+- The rehearsal verifies complete source-archive equality, normalized song/lineup equality, draft-only status, ownership, private member visibility and removal of the temporary SQLite database.
+
+**Security and migration limits:** The archive is an *unencrypted* BLOB in a temporary local SQLite database on a trusted machine. Do not deploy it or use it as a production backup system without encryption-at-rest, key management, retention policy, audit controls, authorization review and durable restore/recovery tests. The original backup is still the authoritative copy. Archive preservation does **not** mean the full browser-specific data is usable in the live shared-domain model, nor that production migration is lossless.
+
+Run the synthetic-only archive checks with `python -m unittest discover -s prototypes/music-ministry/tests -p test_phase3_source_archive.py -v`.
