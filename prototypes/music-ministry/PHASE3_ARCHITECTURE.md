@@ -92,3 +92,23 @@ The migration planner continues to mark automatic production import unavailable 
 The read-only preflight and synthetic draft stager now agree on the V19 **bundled demo fixture** (`id = "demo-sunday"`, `demo = true` with a recognizable lineup shape). It is not a user-authored ministry service and must **not** become a published or draft shared ministry lineup. The planner reports `demo_lineups_excluded` and counts all other lineups; the staging preview and result also report this number. Unknown or malformed demo rows are **not silently skipped**; they require review. All records remain intact in the original downloaded browser backup.
 
 The fix resolves a mismatch where the planner excluded the bundled demo but the stager rejected any backup containing it. No source data is deleted or edited. This is still a development-only, opt-in, admin-gated staging component. It does not preserve every browser preference or provide complete production cutover, and no real owner data or current browser session is staged by this branch.
+
+## Disposable SQLite staging rehearsal — Phase 3
+
+The local-only phase3_migration_rehearsal.py performs a narrowly bounded, **temporary** trial of the atomic V19 draft stager. It does **not** create Wix members, connect to an existing shared database, run the HTTP API, alter the original backup, or change browser storage.
+
+1. Read the supplied wcfi-music-local-backup JSON locally, enforcing an 8 MiB limit and rejecting duplicate JSON fields.
+2. Run the existing staging eligibility check and compute a canonical SHA-256 fingerprint.
+3. Create SQLite inside a temporary directory, seeding synthetic-only admin/member identities **in that temporary database**. No real login, verified church member or production authorization is involved.
+4. Stage there, then verify each **normalized** song and lineup by reading it back. Check ownership, revision, draft status, audit count, no publication and no visibility to the synthetic member.
+5. Close and remove temporary SQLite, re-hash the original file and print only metadata/digests.
+
+Run with a private development backup from a checked-out worktree using Python 3.11+:
+
+~~~powershell
+& .\.venv\Scripts\python.exe -B .\prototypes\music-ministry\phase3_migration_rehearsal.py --backup "C:\path\to\wcfi-local-backup.json"
+~~~
+
+The utility offers **no option to target an existing database**. It temporarily writes normalized private content to a local disposable *unencrypted* SQLite file; run only on a machine you trust. It does not print charts or notes. Keep the original backup private.
+
+**This is not a lossless production migration.** Domain validators project source data onto a narrower backend schema. Browser preferences and supplementary per-record fields are not transferred to normalized records. The original downloaded backup remains authoritative. Durable archival or mapping, real identity and access control, and production rollback require separate implementation and testing. The WCFI Wix website remains untouched until Phase 6.
