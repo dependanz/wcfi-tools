@@ -116,10 +116,6 @@ class SourceArchiveTests(unittest.TestCase):
             "key": "G",
             "sections": [{"label": "Verse", "lines": ["Test-only words"]}],
         })
-        self.store.create_lineup("fixture-admin", {
-            "id": "fixture-lineup", "title": "Existing service",
-            "date": "", "songs": [{"id": "prior-song", "key": "G"}],
-        }) if False else None
         # Create directly in fixture SQLite: application logic rightly refuses
         # lineups referring to unapproved chart records.
         with self.store._connection() as db:
