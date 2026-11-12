@@ -103,6 +103,38 @@ def prepare_v19_draft_stage(envelope: object) -> dict:
     }
 
 
+def read_v19_source_archive(
+    store: MusicStore, verified_admin: str, source_sha256: str,
+) -> dict:
+    """Internal admin-only archival readback; NEVER expose through a member API.
+
+    This is a byte-faithful reconstruction of the parsed JSON backup (including
+    verbatim localStorage strings), not an exact original downloaded file copy.
+    """
+    if not isinstance(source_sha256, str) or len(source_sha256) != 64:
+        raise InvalidRecord("Invalid source fingerprint")
+    with store._connection() as db:
+        store._actor(db, verified_admin, {"admin"})
+        row = db.execute(
+            "SELECT canonical_backup FROM migration_source_archives "
+            "WHERE source_sha256=?",
+            (source_sha256,),
+        ).fetchone()
+        if row is None:
+            raise InvalidRecord("Source archive not found")
+        content = bytes(row["canonical_backup"])
+    observed_digest = hashlib.sha256(content).hexdigest()
+    if not hmac.compare_digest(observed_digest, source_sha256):
+        raise InvalidRecord("Source archive integrity mismatch")
+    try:
+        restored = json.loads(content.decode("utf-8"), object_pairs_hook=_no_duplicate_fields)
+    except (ValueError, UnicodeError) as exc:
+        raise InvalidRecord("Source archive is not valid JSON") from exc
+    if not isinstance(restored, dict):
+        raise InvalidRecord("Source archive must be an object")
+    return restored
+
+
 def stage_v19_drafts(
     store: MusicStore, verified_admin: str, envelope: object,
     *, reviewed_sha256: str, confirmed: bool = False,
@@ -121,6 +153,15 @@ def stage_v19_drafts(
         db.execute("BEGIN IMMEDIATE")
         store._actor(db, verified_admin, {"admin"})
         try:
+            # Archive the ENTIRE validated backup in the very same transaction
+            # as projected draft rows, including the demo excluded from staging
+            # and all raw browser-owned values. No public API exposes this BLOB.
+            canonical_backup = _canonical_bytes(envelope)
+            db.execute(
+                "INSERT INTO migration_source_archives "
+                "(source_sha256,canonical_backup,owner,created_at) VALUES(?,?,?,?)",
+                (digest, sqlite3.Binary(canonical_backup), verified_admin, _utc()),
+            )
             for item in songs:
                 db.execute(
                     "INSERT INTO songs VALUES (?,?,?,?,?,?)",
@@ -140,5 +181,6 @@ def stage_v19_drafts(
         "songs_staged": len(songs),
         "lineups_staged": len(lineups),
         "demo_lineups_excluded": excluded_demos,
+        "source_backup_archived": True,
         "target_state": "draft_only",
     }
