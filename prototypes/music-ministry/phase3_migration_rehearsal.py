@@ -18,8 +18,8 @@ from pathlib import Path
 from phase3_migration_plan import MAX_BYTES
 from phase3_migration_stage import (
     _no_duplicate_fields,
-    _validated_parts,
     _v19_personal_preferences,
+    _validated_parts,
     prepare_v19_draft_stage,
     read_v19_source_archive,
     stage_v19_drafts,
