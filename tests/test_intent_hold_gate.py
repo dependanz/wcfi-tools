@@ -12,7 +12,6 @@ import pytest
 
 from wcfi_tools.audio.intent_hold_gate import IntentHoldGate, pair_key, translation_batch
 
-
 ROLES = ("AC GUITAR", "RED", "KIT", "BASS", "KEYS", "EGUITAR")
 LEVELS = dict(zip(ROLES, (-33.0, -25.0, -30.0, -34.0, -35.0, -32.0)))
 POSITIVE = "unwanted_level_departure"

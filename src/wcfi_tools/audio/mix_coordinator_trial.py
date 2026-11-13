@@ -7,17 +7,17 @@ candidate, not a validated musical target or an accepted user preference.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import hashlib
 import json
 import math
+from contextlib import ExitStack
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from .mix_coordinator import CoordinatorSettings, MixCoordinator, TRACKS, EXCLUDED_TRACKS
 from .kit_study import scan_loudness
+from .mix_coordinator import EXCLUDED_TRACKS, TRACKS, CoordinatorSettings, MixCoordinator
 
 RATE = 48000
 ROLE_OFFSETS_DB = {"RED": 0., "YELLOW": -10., "GREEN": -10., "EGUITAR": -9.,

@@ -6,8 +6,13 @@ import numpy as np
 import pytest
 
 from wcfi_tools.audio.lapel_automix import (
-    LevelerSettings, NativeConfig, NativeStatus, dbfs, quantiles,
-    replacement_mix, summarize_windows,
+    LevelerSettings,
+    NativeConfig,
+    NativeStatus,
+    dbfs,
+    quantiles,
+    replacement_mix,
+    summarize_windows,
 )
 
 

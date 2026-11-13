@@ -13,7 +13,6 @@ import pytest
 
 from wcfi_tools.audio.gain_target_policy import TargetPolicy
 
-
 ROLES = ("AC GUITAR", "RED", "KIT", "BASS", "KEYS", "EGUITAR")
 CONTEXTS = ROLES[2:]
 LEVELS = {"AC GUITAR": -31.0, "RED": -27.0, "KIT": -34.0,

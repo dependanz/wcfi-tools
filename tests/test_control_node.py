@@ -1,10 +1,18 @@
 """Configuration boundary tests: fake host only, never connects to Ableton."""
-from copy import deepcopy
 import math
+from copy import deepcopy
 
 import pytest
 
-from wcfi_tools.audio.control_node import PARAMETERS, RED_PARAMETERS, METERS, ControlNodeError, bind, compare_telemetry, configure_one
+from wcfi_tools.audio.control_node import (
+    METERS,
+    PARAMETERS,
+    RED_PARAMETERS,
+    ControlNodeError,
+    bind,
+    compare_telemetry,
+    configure_one,
+)
 
 
 class Host:
@@ -268,9 +276,11 @@ def test_placement_and_duplicate_names_are_rejected():
 
 def test_cli_apply_requires_receipt_before_connecting(monkeypatch, tmp_path):
     import json
+
     from typer.testing import CliRunner
-    from wcfi_tools.commands.control_node import app
+
     from wcfi_tools.ableton import client
+    from wcfi_tools.commands.control_node import app
     host, owned = setup()
     binding = tmp_path / "owned.json"
     binding.write_text(json.dumps(owned), encoding="utf-8")
@@ -285,9 +295,11 @@ def test_cli_apply_requires_receipt_before_connecting(monkeypatch, tmp_path):
 
 def test_cli_defaults_to_dry_run(monkeypatch, tmp_path):
     import json
+
     from typer.testing import CliRunner
-    from wcfi_tools.commands.control_node import app
+
     from wcfi_tools.ableton import client
+    from wcfi_tools.commands.control_node import app
     host, owned = setup()
     binding = tmp_path / "owned.json"
     binding.write_text(json.dumps(owned), encoding="utf-8")
@@ -300,9 +312,11 @@ def test_cli_defaults_to_dry_run(monkeypatch, tmp_path):
 
 def test_cli_apply_writes_receipt_and_refuses_receipt_overwrite(monkeypatch, tmp_path):
     import json
+
     from typer.testing import CliRunner
-    from wcfi_tools.commands.control_node import app
+
     from wcfi_tools.ableton import client
+    from wcfi_tools.commands.control_node import app
     host, owned = setup()
     binding, receipt = tmp_path / "owned.json", tmp_path / "receipt.jsonl"
     binding.write_text(json.dumps(owned), encoding="utf-8")

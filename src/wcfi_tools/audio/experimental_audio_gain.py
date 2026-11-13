@@ -6,13 +6,12 @@ This module deliberately has no I/O, automatic rearm, or live integration.
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 from copy import deepcopy
-import math
 from statistics import median
 
 from .gain_controller import GainController
-
 
 ROLES = ("RED", "AC GUITAR", "KIT", "BASS", "KEYS", "EGUITAR")
 CONTEXT_ROLES = ROLES[2:]

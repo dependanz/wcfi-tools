@@ -1,7 +1,7 @@
 """Causal evidence, expiry and immutability contracts for fixed-gain calibration."""
-from dataclasses import FrozenInstanceError
 import json
 import math
+from dataclasses import FrozenInstanceError
 
 import pytest
 

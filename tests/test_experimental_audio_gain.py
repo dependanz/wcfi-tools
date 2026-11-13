@@ -14,7 +14,6 @@ import pytest
 
 from wcfi_tools.audio.experimental_audio_gain import ExperimentalAudioGain
 
-
 ROLES = ("RED", "AC GUITAR", "KIT", "BASS", "KEYS", "EGUITAR")
 CONTEXT = {"KIT": -4.0, "BASS": -2.0, "KEYS": -6.0, "EGUITAR": -5.0}
 

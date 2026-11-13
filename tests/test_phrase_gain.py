@@ -1,7 +1,7 @@
 """Hand-authored scalar contracts for the offline phrase-gain candidate."""
-from dataclasses import FrozenInstanceError
 import json
 import math
+from dataclasses import FrozenInstanceError
 
 import pytest
 

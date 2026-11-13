@@ -22,13 +22,12 @@ missing/unflagged/nonfinite values are never interpreted as silence.
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 from copy import deepcopy
-import math
 
 from .experimental_audio_gain import ROLES
 from .experimental_audio_gain_v2 import ExperimentalAudioGainV2
-
 
 RATE = 48000
 PUBLICATION_AGE_LIMIT = .250

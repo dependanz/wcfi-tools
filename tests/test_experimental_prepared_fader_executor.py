@@ -5,7 +5,8 @@ import math
 import pytest
 
 from wcfi_tools.audio.experimental_prepared_fader_executor import (
-    ExperimentalPreparedFaderExecutor, FaderExecutorError,
+    ExperimentalPreparedFaderExecutor,
+    FaderExecutorError,
 )
 
 

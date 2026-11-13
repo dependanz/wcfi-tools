@@ -6,10 +6,9 @@ No retries, implicit rebinding, or batch rollback occur after an uncertain write
 """
 from __future__ import annotations
 
-from copy import deepcopy
 import math
 import uuid
-
+from copy import deepcopy
 
 PARAMETERS = {
     "auto": ("Auto Enable", 0., 1.),

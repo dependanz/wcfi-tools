@@ -6,10 +6,9 @@ applying it safely, including gain slew and peak protection, is the caller's job
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass
-import math
-
 
 CALIBRATION_VERSION = "activity-calibration-v1"
 

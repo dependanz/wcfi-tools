@@ -6,9 +6,9 @@ Energy activity is not a speech classifier or proof of musical correctness.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import ctypes as ct
 import math
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 

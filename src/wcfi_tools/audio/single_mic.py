@@ -1,7 +1,7 @@
 """Offline access to the RED plugin's exact native calibration/hold engine."""
-from dataclasses import dataclass
 import ctypes as ct
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 from .lapel_automix import LevelerSettings, NativeConfig, NativeStatus

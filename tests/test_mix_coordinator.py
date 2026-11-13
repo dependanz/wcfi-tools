@@ -2,8 +2,12 @@
 import numpy as np
 import pytest
 
-from wcfi_tools.audio.mix_coordinator import CoordinatorSettings, MixCoordinator, TRACKS, SUPPORT_TRACKS
-
+from wcfi_tools.audio.mix_coordinator import (
+    SUPPORT_TRACKS,
+    TRACKS,
+    CoordinatorSettings,
+    MixCoordinator,
+)
 
 RATE = 8000
 

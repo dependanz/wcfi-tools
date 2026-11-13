@@ -11,7 +11,10 @@ import copy
 import uuid
 
 from .experimental_fader_executor import (
-    ExperimentalFaderExecutor, FaderExecutorError, _db, _number,
+    ExperimentalFaderExecutor,
+    FaderExecutorError,
+    _db,
+    _number,
 )
 
 

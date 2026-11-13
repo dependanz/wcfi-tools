@@ -15,14 +15,13 @@ clipping guarantee (even attenuation can increase a sum through cancellation).
 """
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 import math
+from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping
 
 import numpy as np
-
 
 TRACKS = ("RED", "YELLOW", "GREEN", "EGUITAR", "AC GUITAR", "KEYS", "KIT")
 SUPPORT_TRACKS = TRACKS[1:]

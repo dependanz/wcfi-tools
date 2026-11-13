@@ -6,10 +6,9 @@ rule for a dedicated source, not a speech or musical-intent classifier.
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass
-import math
-
 
 POLICY_VERSION = "lapel-phrase-gain-v1"
 _EPSILON = 1e-12

@@ -1,12 +1,11 @@
 """Fake scalar contracts only. No capture, host, filesystem output, or audio."""
-from copy import deepcopy
 import math
+from copy import deepcopy
 
 import pytest
 
 from wcfi_tools.audio.experimental_audio_gain import ROLES
 from wcfi_tools.audio.experimental_live_input import PublicationClockGainV2
-
 
 EXPECTED = {role: {"node_id": "node:" + role, "pid": 321, "epoch": 4} for role in ROLES}
 OFFSETS = {"KIT": -4., "BASS": -2., "KEYS": -6., "EGUITAR": -5.}
