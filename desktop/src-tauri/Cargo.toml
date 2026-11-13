@@ -1,0 +1,19 @@
+[package]
+name = "wcfi-audio"
+version = "0.1.0"
+description = "WCFI Audio Emulator desktop control surface"
+authors = ["WCFI"]
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+url = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true

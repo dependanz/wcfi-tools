@@ -1,0 +1,21 @@
+-- [SMTG] SMTG_AAX_SDK_PATH is not set. If you need it, please download the AAX SDK!
+-- Could NOT find LIBJACK (missing: LIBJACK_LIBRARIES LIBJACK_INCLUDE_DIR) 
+-- Could NOT find LIBJACK (missing: LIBJACK_LIBRARIES LIBJACK_INCLUDE_DIR) 
+-- [SMTG] LIBJACK_FOUND is not set.
+-- [SMTG] Setup running moduleinfotool for WcfiControlNode
+-- [SMTG] Setup running validator for WcfiControlNode
+-- Configuring done (0.8s)
+-- Generating done (0.9s)
+-- Build files have been written to: C:/dev/wcfi-tools/native/wcfi_control_node/build
+[1/2] Building CXX object CMakeFiles\control_tests.dir\tests.cpp.obj
+cl : Command line warning D9025 : overriding '/EHs' with '/EHa'
+cl : Command line warning D9025 : overriding '/fp:fast' with '/fp:precise'
+[2/2] Linking CXX executable bin\control_tests.exe
+Internal ctest changing into directory: C:/dev/wcfi-tools/native/wcfi_control_node/build
+Test project C:/dev/wcfi-tools/native/wcfi_control_node/build
+    Start 1: control_node
+1/1 Test #1: control_node .....................   Passed    1.85 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   1.86 sec

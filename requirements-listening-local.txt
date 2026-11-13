@@ -1,0 +1,9 @@
+# Install CUDA PyTorch separately using the official cu126 index; see docs/soundcheck.md.
+transformers==5.19.0
+bitsandbytes==0.50.2
+accelerate==1.15.0
+librosa==1.0.0
+soundfile==0.14.0
+scipy==1.18.1
+audiobox_aesthetics==0.0.4
+-e .[soundcheck]

@@ -29,6 +29,7 @@ def ffprobe_duration(path: Path) -> float:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise RuntimeError(f"ffprobe failed for {path}: {result.stderr.strip()}")
@@ -49,7 +50,7 @@ def extract_chunk(source: Path, dest: Path, start_seconds: float, duration_secon
         "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
         str(dest),
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed for {source} at {start_seconds:.1f}s: {result.stderr.strip()}")
     if not dest.exists() or dest.stat().st_size <= 1024:

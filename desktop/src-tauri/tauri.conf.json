@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WCFI Audio",
+  "version": "0.1.0",
+  "identifier": "org.wcfi.audio",
+  "build": { "frontendDist": "../../src/wcfi_tools/audio/web" },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": { "active": false }
+}

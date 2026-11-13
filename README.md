@@ -1,90 +1,44 @@
-# wcfi-tools
-
-A small toolkit for **Word Christian Fellowship International**, exposed as a CLI (`wcfi <command>`).
-The engine is UI-agnostic so the same core can later back a web app or desktop app.
-
-First tools:
-
-- **`wcfi setup`** — one-time interactive setup for the API keys the other tools need (OpenAI for
-  transcription; OpenAI or Anthropic/Claude for summarization). Keys are stored in your OS keyring.
-- **`wcfi meeting summarize <folder>`** — turn a folder of meeting audio into a summarized set of
-  copy-able minutes artifacts.
-
-## Install
+# WCFI Toolkit
 
 ```bash
-pipx install .           # from a clone, or:
-pip install -e ".[dev]"  # editable, for development
+pip install wcfi
 ```
 
-You also need **ffmpeg** and **ffprobe** on your `PATH` (used to chunk audio):
+A modular toolkit built for **Word Christian Fellowship International**, with tools that other churches and AV teams may eventually adopt.
 
-- Windows: `choco install ffmpeg` or `winget install Gyan.FFmpeg`
-- macOS: `brew install ffmpeg`
-- Debian/Ubuntu: `sudo apt install ffmpeg`
+## What can the toolkit do?
 
-## Setup
+- [x] **Meeting Minutes** — Transcribe recordings and draft meeting minutes.
+- [x] **Soundcheck** — Analyze rehearsal tracks and prepare calibrated Ableton Live set copies.
+- [x] **Monitor Control** — View and control connected displays and application windows on Windows.
+- [x] **Feedback Detection** — Detect persistent tones and feedback-like growth.
+- [x] **Ableton Live Tools** — Inspect and explicitly control tracks, faders, and devices.
+- [x] **Audio Emulator** — Simulate multichannel audio inputs and measure DAW outputs.
+- [x] **Audio Research Lab** — Evaluate recordings, mix proposals, and experimental audio models.
+- [ ] **Speaker Attribution** — Identify participants in recorded meetings.
+- [ ] **Mixing Assistant** — Offer validated, reviewable mixing recommendations.
+- [ ] **Live Automixing** — Develop and qualify safe automated mixing for real services.
 
-**Required first** — `wcfi meeting …` won't run until setup has completed once.
+Checked items have an initial implementation; they are **not necessarily production-ready**.
+
+## Documentation
+
+[Soundcheck](docs/soundcheck.md) · [Monitor Control](docs/monitor-control.md) · [Feedback Detection](docs/audio-detection.md) · [Ableton Bridge](docs/ableton-bridge.md) · [Audio Emulator](docs/audio-emulator.md) · [Rehearsal Analysis](docs/role-analysis.md) · [Home Shadow](docs/home-shadow.md) · [Mix Evaluation](docs/full-mix-benchmark.md)
+
+## Development
+
+Currently, install from source (Python 3.11+):
 
 ```bash
-wcfi setup            # interactive: pick providers, paste keys (masked + validated)
-wcfi setup --check    # verify configuration without changing anything (doctor mode)
+git clone https://github.com/dependanz/wcfi-tools.git
+cd wcfi-tools
+git switch checkpoint/audio-emulator-monitor-control
+python -m pip install -e ".[dev]"
+wcfi --help
 ```
 
-## Summarize a meeting
-
-Point it at a folder containing the meeting audio (`.m4a`, `.mp3`, `.wav`, …):
-
-```bash
-wcfi meeting summarize <meeting-folder>
-```
-
-Options:
-
-```
---provider {openai|anthropic}   Summarization backend (default from `wcfi setup`)
---summary-model TEXT            Override the summarization model
---transcribe-model TEXT         Override the transcription model (OpenAI)
---chunk-minutes FLOAT           Audio chunk length (default 5)
---emit {md,paste,all}           Which artifacts to write (default all)
---force                         Rebuild cached chunks/transcripts/summaries
---dry-run                       Discover inputs & estimate chunks; no API calls
-```
-
-Outputs (written into the meeting folder):
-
-- `minutes.md` — finalized minutes (headings, tables, bullets)
-- `paste-block.txt` — plain, section-by-section text for pasting into a styled template
-- `_work/` — cached transcripts and intermediate facts (resumable; re-runs don't re-bill)
-
-## Configuration & secrets
-
-Precedence at runtime: **CLI flag → environment variable → `.env` → OS keyring → interactive prompt.**
-
-- Non-secret config: `wcfi setup` writes a small TOML in your platform config dir.
-- Secrets: stored in the OS keyring (Windows Credential Manager / macOS Keychain / Secret Service).
-  `.env` / environment variables are honored as a fallback for servers and CI.
-
-## Architecture
-
-```
-wcfi (CLI, Typer)  ─┐
-web (later)         ├─►  wcfi_tools.core  (pipeline · providers · artifacts · config)
-desktop (later)     ─┘
-```
-
-The CLI is a thin shell; all logic lives in the importable core so other front-ends can reuse it.
-
-## Roadmap
-
-- **Speaker identification** — `wcfi meeting summarize` will ask whether you want speakers
-  named. If yes, it plays short snippets and you annotate who is speaking; the transcript is
-  then attributed by name (making attendance, movers, and seconders far more reliable).
-- **`wcfi meeting enroll`** — capture/refresh per-person voiceprints from labeled samples so
-  identification can carry across meetings.
-- Longer term, the same UI-agnostic core can back a web or desktop front-end.
+Optional features require additional dependencies and, in some cases, native components. See the relevant documentation. The current Python distribution is named `wcfi-tools`; the shorter `wcfi` PyPI package is a future goal.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE).
