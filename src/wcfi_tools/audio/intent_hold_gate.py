@@ -246,9 +246,9 @@ class IntentHoldGate:
         denying = [record for record in self._denials if record["binding_key"] == key
                    and record["effective_from"] <= now < record["expires_at"]]
         if denying:
-            denial = sorted(denying, key=lambda record: (
+            denial = min(denying, key=lambda record: (
                 record["effective_from"], record["reason"], record["id"]
-            ))[0]
+            ))
             if denial["reason"] == "preserve_intended_change" and any(
                 cue["binding"] == binding and cue["assertion"] == "unwanted_level_departure"
                 and cue["effective_from"] == denial["effective_from"]
@@ -365,9 +365,8 @@ class IntentHoldGate:
         # A mislabeled staged record, or ambiguous input while staging, cannot
         # exploit its caller-supplied context to preserve staged acceptance.
         destination = "active"
-        if self._stage is not None:
-            if binding is None or binding != self._binding:
-                destination = "recovery"
+        if self._stage is not None and (binding is None or binding != self._binding):
+            destination = "recovery"
         self._hold(now, reason, context=destination, invalidate_initial=True)
         raise ValueError(reason)
 
@@ -668,7 +667,7 @@ class IntentHoldGate:
         now = frame.get("time_seconds") if isinstance(frame, dict) else None
         self._drain(now)
         if not isinstance(frame, dict):
-            raise ValueError("frame must be a mapping")
+            raise ValueError("frame must be a mapping")  # noqa: TRY004 - retain error contract
         if self._stage is not None and self._stage["valid"] and now > self._stage["prepared_at"]:
             metadata = self._stage["metadata"]
             matched = frame.get("state_matches") is True and all(frame.get(key) == metadata[key] for key in (

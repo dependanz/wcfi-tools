@@ -128,7 +128,7 @@ class TargetPolicy:
     @staticmethod
     def _validate_metadata(metadata, namespace):
         if not isinstance(metadata, dict):
-            raise ValueError("calibration metadata must be a mapping")
+            raise ValueError("calibration metadata must be a mapping")  # noqa: TRY004 - retain policy validation API
         for key in ("target_revision", "scope_revision", "state_revision", "authorization_epoch"):
             if not _identifier(metadata.get(key)):
                 raise ValueError("missing calibration revision: " + key)
@@ -260,7 +260,7 @@ class TargetPolicy:
     @staticmethod
     def _validate_declaration(record, now):
         if not isinstance(record, dict):
-            raise ValueError("declaration must be a mapping")
+            raise ValueError("declaration must be a mapping")  # noqa: TRY004 - retain policy validation API
         allowed_keys = {
             "declaration_id", "issuer", "provenance", "scope_revision", "target_revision",
             "state_revision", "authorization_epoch", "issued_at", "received_at", "effective_from",
@@ -282,7 +282,7 @@ class TargetPolicy:
             raise ValueError("explicit track or hold operator mode is required")
         applicability = record.get("applicability")
         if not isinstance(applicability, dict):
-            raise ValueError("explicit applicability is required")
+            raise ValueError("explicit applicability is required")  # noqa: TRY004 - retain policy validation API
         if set(applicability) != {*APPLICABILITY_KEYS, "expected_activity", "bleed_suitable"}:
             raise ValueError("applicability accepts only the explicit public context contract")
         boolean_or_unknown = lambda value: value is True or value is False or value is None
@@ -398,7 +398,7 @@ class TargetPolicy:
 
     def feed(self, frame):
         if not isinstance(frame, dict):
-            raise ValueError("frame must be a scalar mapping")
+            raise ValueError("frame must be a scalar mapping")  # noqa: TRY004 - retain policy validation API
         now = frame.get("time_seconds")
         if not isinstance(now, int) or isinstance(now, bool) or now < 1:
             raise ValueError("completed frame endpoint must be a positive integer")

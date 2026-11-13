@@ -114,7 +114,7 @@ def test_legacy_binding_without_profile_keeps_legacy_range():
 
 
 def test_red_telemetry_distinguishes_holding_from_legacy_active():
-    host, owned = red_setup()
+    host, _owned = red_setup()
     values = (-30., -20., -24., -14., 6., 6., 0., 4., 0., 1.)
     for (key, (name, low, high)), value in zip(METERS.items(), values):
         if key == "state_code":
@@ -281,7 +281,7 @@ def test_cli_apply_requires_receipt_before_connecting(monkeypatch, tmp_path):
 
     from wcfi_tools.ableton import client
     from wcfi_tools.commands.control_node import app
-    host, owned = setup()
+    _host, owned = setup()
     binding = tmp_path / "owned.json"
     binding.write_text(json.dumps(owned), encoding="utf-8")
     def forbidden(**kwargs):

@@ -68,7 +68,8 @@ class PhraseGain:
     not alias internal state.
     """
 
-    def __init__(self, settings=PhraseSettings()):
+    # The immutable default is shared intentionally for backwards compatibility.
+    def __init__(self, settings=PhraseSettings()):  # noqa: B008
         if not isinstance(settings, PhraseSettings):
             raise TypeError("Expected validated PhraseSettings")
         self._settings = settings

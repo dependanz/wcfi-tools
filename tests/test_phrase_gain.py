@@ -8,7 +8,7 @@ import pytest
 from wcfi_tools.audio.phrase_gain import PhraseGain, PhraseSettings
 
 
-def run(levels, settings=PhraseSettings()):
+def run(levels, settings=PhraseSettings()):  # noqa: B008 - frozen fixture
     policy = PhraseGain(settings)
     return policy, [policy.observe(value, bin_index=i) for i, value in enumerate(levels)]
 
@@ -143,7 +143,7 @@ def test_support_is_limited_to_the_trailing_twenty_bins():
 
 @pytest.mark.parametrize("invalid", [math.nan, math.inf, -math.inf])
 def test_nonfinite_measurement_clears_evidence_holds_gain_and_is_json_safe(invalid):
-    policy, rows = run([-50.] * 10)
+    policy, _rows = run([-50.] * 10)
     held = policy.offset_db
     row = policy.observe(invalid, bin_index=10)
     assert row["reason"] == "invalid_nonfinite"

@@ -8,7 +8,7 @@ import pytest
 from wcfi_tools.audio.activity_calibration import ActivityCalibration, CalibrationSettings
 
 
-def run(levels, settings=CalibrationSettings()):
+def run(levels, settings=CalibrationSettings()):  # noqa: B008 - frozen fixture
     calibrator = ActivityCalibration(settings)
     return calibrator, [calibrator.observe(level, bin_index=i) for i, level in enumerate(levels)]
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import itertools
 import math
 from pathlib import Path
 
@@ -80,7 +81,7 @@ def assert_exact_mutation_reporting(rows):
         assert row["live_eligible"] is False
     changed = moves(rows)
     assert all(b["time_seconds"] - a["time_seconds"] >= 10
-               for a, b in zip(changed, changed[1:]))
+               for a, b in itertools.pairwise(changed))
 
 
 def test_reference_and_new_statistics_are_unavailable_before_frame16():

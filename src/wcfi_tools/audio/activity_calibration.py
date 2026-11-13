@@ -61,7 +61,8 @@ class ActivityCalibration:
     ``support_bins`` then describes the frozen calibration evidence, not new data.
     """
 
-    def __init__(self, settings=CalibrationSettings()):
+    # Frozen default settings are intentional API behavior.
+    def __init__(self, settings=CalibrationSettings()):  # noqa: B008
         if not isinstance(settings, CalibrationSettings):
             raise TypeError("Expected validated CalibrationSettings")
         self._settings = settings

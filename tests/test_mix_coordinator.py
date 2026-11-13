@@ -13,8 +13,8 @@ RATE = 8000
 
 
 def settings(**overrides):
-    values = dict(baseline_gains_db={t: 0. for t in TRACKS},
-                  reference_support_to_lead_db={t: -6. for t in SUPPORT_TRACKS})
+    values = {"baseline_gains_db": {t: 0. for t in TRACKS},
+              "reference_support_to_lead_db": {t: -6. for t in SUPPORT_TRACKS}}
     values.update(overrides)
     return CoordinatorSettings(**values)
 

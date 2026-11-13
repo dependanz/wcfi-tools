@@ -13,7 +13,8 @@ from .phrase_gain import PhraseGain, PhraseSettings
 
 
 class PhraseControlDsp:
-    def __init__(self, dll_path, settings=PhraseSettings(), *, rate=48000, channels=2,
+    # Frozen settings intentionally retain the original constructor contract.
+    def __init__(self, dll_path, settings=PhraseSettings(), *, rate=48000, channels=2,  # noqa: B008
                  native_factory=NativeControlDsp):
         import numpy as np
         if not isinstance(settings, PhraseSettings):

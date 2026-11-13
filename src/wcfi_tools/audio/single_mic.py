@@ -22,7 +22,8 @@ class MicSettings(LevelerSettings):
 
 class NativeMicDsp:
     """Loads only an explicitly supplied workspace DLL; no host/audio device I/O."""
-    def __init__(self, dll_path, settings=MicSettings(), *, rate=48000, channels=2):
+    # Frozen settings intentionally retain the original constructor contract.
+    def __init__(self, dll_path, settings=MicSettings(), *, rate=48000, channels=2):  # noqa: B008
         if not isinstance(settings, MicSettings):
             raise TypeError("Expected MicSettings")
         if (isinstance(rate, bool) or not isinstance(rate, (int, float))

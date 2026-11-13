@@ -195,7 +195,7 @@ def configure_one(client, owned, setting, value, *, apply=False, journal=None):
     profile, definitions = _profile(owned.get("device_name"))
     if owned.get("profile", profile) != profile:
         raise ControlNodeError("Invalid policy profile")
-    name, low, high = definitions[setting]
+    _, low, high = definitions[setting]
     if not low <= value <= high or (setting == "auto" and value not in (0., 1.)):
         raise ControlNodeError(f"{setting} must be within {low}..{high}")
     if apply and not callable(journal):

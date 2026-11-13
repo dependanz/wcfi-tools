@@ -265,8 +265,8 @@ def test_journal_failure_before_rpc_latches_stop():
 def test_unqualified_arm_has_no_host_effect_and_cannot_be_rearmed():
     host, clock, events = FakeClient(), Clock(), []
     executor = ExperimentalFaderExecutor(host, clock, events.append)
-    arguments = dict(session_id="session-a", track_id="track-ac", volume_id="volume-ac",
-                     received_at=0, live_qualified=False)
+    arguments = {"session_id": "session-a", "track_id": "track-ac", "volume_id": "volume-ac",
+                 "received_at": 0, "live_qualified": False}
     with pytest.raises(FaderExecutorError, match="live_path_unqualified"):
         executor.arm(host.snapshot, **arguments)
     assert not host.calls

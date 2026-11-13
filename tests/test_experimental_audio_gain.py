@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import itertools
 import math
 from pathlib import Path
 
@@ -84,7 +85,7 @@ def assert_bounded(rows):
             assert row["controller"]["delta_db"] == row["delta_db"]
             assert row["controller"]["offset_db"] == row["offset_db"]
     assert all(b["time_seconds"] - a["time_seconds"] >= 10
-               for a, b in zip(moves, moves[1:]))
+               for a, b in itertools.pairwise(moves))
 
 
 def test_reference_is_unavailable_until_sixteen_frames_and_is_then_frozen():
@@ -138,7 +139,7 @@ def test_unchanged_relationship_and_common_mode_do_not_need_cues_or_move():
     for common in (0.0, 4.0):
         policy = ExperimentalAudioGain()
         rows = feed_range(policy, 1, 120,
-                          lambda t, _: frame(t, common=common if 33 <= t <= 96 else 0))
+                          lambda t, _, common=common: frame(t, common=common if 33 <= t <= 96 else 0))
         assert len(rows) == 60
         assert not changes(rows)
         assert policy.offset_db == 0.0
