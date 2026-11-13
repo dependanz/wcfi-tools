@@ -19,6 +19,7 @@ from phase3_migration_plan import MAX_BYTES
 from phase3_migration_stage import (
     _no_duplicate_fields,
     _validated_parts,
+    _v19_personal_preferences,
     prepare_v19_draft_stage,
     read_v19_source_archive,
     stage_v19_drafts,
@@ -33,7 +34,7 @@ class RehearsalFailed(RuntimeError):
     """A verification failed; no existing database is altered."""
 
 
-def _verify_rows(store: MusicStore, songs: list[dict], lineups: list[dict]) -> None:
+def _verify_rows(store: MusicStore, songs: list[dict], lineups: list[dict], preferences: dict) -> None:
     """Confirm actual staged records equal the domain's expected projection."""
     stored_songs = store.list_songs(_FIXTURE_ADMIN)
     stored_lineups = store.list_lineups(_FIXTURE_ADMIN)
@@ -53,6 +54,13 @@ def _verify_rows(store: MusicStore, songs: list[dict], lineups: list[dict]) -> N
     compare(stored_lineups, lineups)
     if store.list_songs(_FIXTURE_MEMBER) or store.list_lineups(_FIXTURE_MEMBER):
         raise RehearsalFailed("A private staged record was exposed to a regular member")
+    actual_preferences = store.get_member_preferences(_FIXTURE_ADMIN)
+    if actual_preferences != {**preferences, "revision": 1}:
+        raise RehearsalFailed("Personal preferences did not round-trip correctly")
+    if store.get_member_preferences(_FIXTURE_MEMBER) != {
+        "keys": {}, "font": 21, "lyrics": False, "revision": 0,
+    }:
+        raise RehearsalFailed("Private preferences leaked into another member account")
     with store._connection() as db:
         private_songs = db.execute(
             "SELECT COUNT(*) FROM songs WHERE state='draft' AND owner=?", (_FIXTURE_ADMIN,)
@@ -73,6 +81,7 @@ def rehearse_v19_envelope(envelope: dict) -> dict:
     """Stage only into temporary SQLite and return metadata-only verification."""
     prepared = prepare_v19_draft_stage(envelope)
     expected_songs, expected_lineups, digest, demos = _validated_parts(envelope)
+    expected_preferences = _v19_personal_preferences(envelope)
     if digest != prepared["source_sha256"]:
         raise RehearsalFailed("Preflight fingerprint disagreement")
 
@@ -91,7 +100,7 @@ def rehearse_v19_envelope(envelope: dict) -> dict:
             store, _FIXTURE_ADMIN, envelope,
             reviewed_sha256=digest, confirmed=True,
         )
-        _verify_rows(store, expected_songs, expected_lineups)
+        _verify_rows(store, expected_songs, expected_lineups, expected_preferences)
         # Verify that the complete original logical backup is recoverable,
         # not just normalized songs/lineups. This includes private browser
         # preferences, raw storage strings and the excluded demo lineup.
@@ -122,6 +131,8 @@ def rehearse_v19_envelope(envelope: dict) -> dict:
         "member_visibility": "none",
         "published_records": 0,
         "normalized_domain_records_match": True,
+        "personal_preferences_migrated_and_verified": True,
+        "personal_display_keys_migrated": len(expected_preferences["keys"]),
         "complete_browser_backup_archived_and_verified": True,
         "archive_contains_excluded_demo_and_raw_storage": True,
         "browser_specific_fields_migrated": False,
