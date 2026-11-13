@@ -69,7 +69,7 @@ class PhraseGain:
     """
 
     # The immutable default is shared intentionally for backwards compatibility.
-    def __init__(self, settings=PhraseSettings()):  # noqa: B008
+    def __init__(self, settings=PhraseSettings()):
         if not isinstance(settings, PhraseSettings):
             raise TypeError("Expected validated PhraseSettings")
         self._settings = settings

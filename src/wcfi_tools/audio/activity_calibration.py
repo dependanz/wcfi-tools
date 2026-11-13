@@ -62,7 +62,7 @@ class ActivityCalibration:
     """
 
     # Frozen default settings are intentional API behavior.
-    def __init__(self, settings=CalibrationSettings()):  # noqa: B008
+    def __init__(self, settings=CalibrationSettings()):
         if not isinstance(settings, CalibrationSettings):
             raise TypeError("Expected validated CalibrationSettings")
         self._settings = settings

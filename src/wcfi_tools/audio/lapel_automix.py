@@ -62,7 +62,7 @@ class NativeControlDsp:
     """Explicit handle for ABIv1; constructor loads only the supplied local DLL."""
 
     # Frozen settings intentionally retain the original constructor contract.
-    def __init__(self, dll_path, settings=LevelerSettings(), *, rate=48000, channels=2):  # noqa: B008
+    def __init__(self, dll_path, settings=LevelerSettings(), *, rate=48000, channels=2):
         if not isinstance(settings, LevelerSettings):
             raise TypeError("Expected validated LevelerSettings")
         if (isinstance(rate, bool) or not isinstance(rate, (int, float))
