@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from wcfi_tools.audio.howler_monitor import monitor
@@ -35,8 +36,10 @@ def block(samples, gap=False):
 def test_cli_help():
     result = runner.invoke(app, ["audio", "detect", "howler", "--help"])
     assert result.exit_code == 0, result.output
-    assert "--device" in result.output
-    assert "--threshold-db" in result.output
+    # Rich may insert ANSI styling inside option names on Linux CI.
+    help_text = unstyle(result.output)
+    assert "--device" in help_text
+    assert "--threshold-db" in help_text
 
 
 def test_device_listing_does_not_capture(monkeypatch):
