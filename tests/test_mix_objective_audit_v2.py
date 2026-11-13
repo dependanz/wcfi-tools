@@ -4,18 +4,27 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from wcfi_tools.audio.mix_objective_audit_v2 import (
-    BANDS, HOP, _scan_ffmpeg_pipe, capture_section_attack_margins,
-    kit_flux_10ms, pareto_descriptive, select_local_events,
-    source_saturation, vocal_channel_evidence,
-)
 from wcfi_tools.audio.mix_objective_audit import (
-    BANDS_HZ, TRACKS, INDEX, _variants, evaluate_objectives,
+    BANDS_HZ,
+    INDEX,
+    TRACKS,
+    _variants,
+    evaluate_objectives,
+)
+from wcfi_tools.audio.mix_objective_audit_v2 import (
+    BANDS,
+    HOP,
+    _scan_ffmpeg_pipe,
+    capture_section_attack_margins,
+    kit_flux_10ms,
+    pareto_descriptive,
+    select_local_events,
+    source_saturation,
+    vocal_channel_evidence,
 )
 
 class Reader:
@@ -138,7 +147,7 @@ def test_missing_true_peak_cannot_be_pareto_ranked():
 def test_invalid_inputs_fail_before_creating_output(tmp_path):
     cmd=[sys.executable,'-m','wcfi_tools.audio.mix_objective_audit_v2',
          '--report',str(tmp_path/'missing.json'),'--output',str(tmp_path/'never')]
-    r=subprocess.run(cmd,capture_output=True,text=True)
+    r=subprocess.run(cmd,capture_output=True,text=True, check=False)
     assert r.returncode!=0
     assert not (tmp_path/'never').exists()
 
@@ -162,10 +171,12 @@ def test_ffmpeg_r128_from_pipe_no_audio_file(tmp_path):
 def test_full_synthetic_offline_run_verifies_sources_and_writes_only_json(tmp_path,monkeypatch):
     """Short synthetic fixture with the same seven sources; no church material."""
     import hashlib
+    import shutil
+
     import soundfile as sf
+
     from wcfi_tools.audio import mix_objective_audit as v1
     from wcfi_tools.audio import mix_objective_audit_v2 as v2
-    import shutil
     rate=48000
     cal_end=rate
     length=rate*3

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+
 import numpy as np
 import pytest
 
@@ -140,6 +141,7 @@ def test_peak_gate_is_exploratory_not_live_eligibility():
 def test_end_to_end_report_only_on_synthetic_mocks(monkeypatch,tmp_path):
     """Exercise orchestration / filesystem isolation without 120s of fake WAVs."""
     import hashlib
+
     import soundfile as sf
     waveforms={}
     for t in v1.TRACKS:

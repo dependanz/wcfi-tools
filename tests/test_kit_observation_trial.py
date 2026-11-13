@@ -8,10 +8,17 @@ import pytest
 import soundfile as sf
 
 from wcfi_tools.audio.kit_observation_trial import (
-    PairReference, PowerWindow, calibrate_500ms, evaluate, load_pair,
+    PairReference,
+    PowerWindow,
+    calibrate_500ms,
+    evaluate,
+    load_pair,
 )
 from wcfi_tools.audio.mix_coordinator import (
-    CoordinatorSettings, MixCoordinator, SUPPORT_TRACKS, TRACKS,
+    SUPPORT_TRACKS,
+    TRACKS,
+    CoordinatorSettings,
+    MixCoordinator,
 )
 
 
@@ -132,7 +139,7 @@ def test_cli_preserves_existing_directory(tmp_path):
     marker.write_text("keep")
     outcome = subprocess.run([sys.executable, "-m", "wcfi_tools.audio.kit_observation_trial",
                               "--report", str(path), "--decisions", "unused.json",
-                              "--output", str(old)], capture_output=True, text=True)
+                              "--output", str(old)], capture_output=True, text=True, check=False)
     assert outcome.returncode != 0
     assert marker.read_text() == "keep"
     assert not (old / "protocol.json").exists()
@@ -152,7 +159,7 @@ def test_cli_end_to_end_and_baseline_mismatch_refusal(tmp_path):
     output = tmp_path / "study"
     command = [sys.executable, "-m", "wcfi_tools.audio.kit_observation_trial",
                "--report", str(path), "--decisions", str(decisions), "--output", str(output)]
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     summary = json.loads((output / "summary.json").read_text())
     assert summary["baseline_measurement_replay_matches_saved_trace"] is True
@@ -163,7 +170,7 @@ def test_cli_end_to_end_and_baseline_mismatch_refusal(tmp_path):
     obj.events[80]["evidence_bins"]["KIT"] = 999
     decisions.write_text(json.dumps(obj.events))
     command[-1] = str(tmp_path / "mismatched")
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     assert result.returncode != 0
     assert "Baseline measurement replay mismatch" in result.stderr
     assert not (tmp_path / "mismatched" / "summary.json").exists()

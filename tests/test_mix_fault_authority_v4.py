@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from wcfi_tools.audio import mix_fault_authority_v4 as v4
 from wcfi_tools.audio import mix_candidate_explorer_v3 as v3
+from wcfi_tools.audio import mix_fault_authority_v4 as v4
 from wcfi_tools.audio import mix_objective_audit as v1
 
 
@@ -74,7 +74,7 @@ def test_invalid_mix_pcm_and_scenario_rejected():
 
 def test_parse_ebur128_requires_final_summary_and_finite_values():
     log='noise\nSummary:\n Integrated loudness:\n I: -23.5 LUFS\n True peak:\n Peak: -4.1 dBFS\n'
-    assert v4.parse_r128_summary(log)==dict(integrated_lufs=-23.5,true_peak_dbtp=-4.1)
+    assert v4.parse_r128_summary(log)=={'integrated_lufs': -23.5, 'true_peak_dbtp': -4.1}
     with pytest.raises(ValueError,match='summary'):
         v4.parse_r128_summary('no summary')
     with pytest.raises(ValueError,match='missing'):

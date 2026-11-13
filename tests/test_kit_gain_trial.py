@@ -11,10 +11,18 @@ import pytest
 import soundfile as sf
 
 from wcfi_tools.audio.kit_gain_trial import (
-    VirtualKitGain, run_study, simulate, summarize,
+    VirtualKitGain,
+    run_study,
+    simulate,
+    summarize,
 )
 from wcfi_tools.audio.kit_observation_trial import PairReference
-from wcfi_tools.audio.mix_coordinator import CoordinatorSettings, MixCoordinator, SUPPORT_TRACKS, TRACKS
+from wcfi_tools.audio.mix_coordinator import (
+    SUPPORT_TRACKS,
+    TRACKS,
+    CoordinatorSettings,
+    MixCoordinator,
+)
 
 
 def settings():
@@ -139,7 +147,7 @@ def test_cli_end_to_end_verifies_hashes_and_never_overwrites(tmp_path):
     output = tmp_path / "run"
     command = [sys.executable, "-m", "wcfi_tools.audio.kit_gain_trial", "--report", str(report),
                "--decisions", str(decisions), "--output", str(output)]
-    finished = subprocess.run(command, capture_output=True, text=True)
+    finished = subprocess.run(command, capture_output=True, text=True, check=False)
     assert finished.returncode == 0, finished.stderr
     result = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     assert result["protocol"]["saved_100ms_trace_replay_verified_bins"] == 600
@@ -151,7 +159,7 @@ def test_cli_end_to_end_verifies_hashes_and_never_overwrites(tmp_path):
     assert result["comparisons"]["500ms"]["kit_step_plus10"]["minimum_applied_gain_db"] < 0
     marker = output / "leave-alone.txt"
     marker.write_text("saved", encoding="utf-8")
-    replay = subprocess.run(command, capture_output=True, text=True)
+    replay = subprocess.run(command, capture_output=True, text=True, check=False)
     assert replay.returncode != 0
     assert marker.read_text(encoding="utf-8") == "saved"
 

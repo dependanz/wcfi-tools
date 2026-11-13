@@ -1,8 +1,6 @@
 """First-principles WCFI audit tests; no church audio or Ableton required."""
 from __future__ import annotations
 
-import math
-from pathlib import Path
 import subprocess
 import sys
 
@@ -10,8 +8,15 @@ import numpy as np
 import pytest
 
 from wcfi_tools.audio.mix_objective_audit import (
-    BANDS_HZ, INDEX, TRACKS, _band_powers, _capture_features,
-    _select_onsets, _source_windows, _variants, evaluate_objectives,
+    BANDS_HZ,
+    INDEX,
+    TRACKS,
+    _band_powers,
+    _capture_features,
+    _select_onsets,
+    _source_windows,
+    _variants,
+    evaluate_objectives,
 )
 
 
@@ -138,6 +143,6 @@ def test_failure_before_output_on_missing_report(tmp_path):
     output=tmp_path/'should-not-exist'
     r=subprocess.run([sys.executable,'-m','wcfi_tools.audio.mix_objective_audit',
                       '--report',str(tmp_path/'missing-report.json'), '--output',str(output)],
-                     capture_output=True,text=True)
+                     capture_output=True,text=True, check=False)
     assert r.returncode != 0
     assert not output.exists()

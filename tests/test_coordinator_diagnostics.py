@@ -1,24 +1,31 @@
 """Instrumentation must not change a single output sample or legacy event."""
-from copy import deepcopy
 import json
 import subprocess
 import sys
+from copy import deepcopy
 
 import numpy as np
 import pytest
 
 from wcfi_tools.audio.coordinator_diagnostics import (
-    DiagnosticMixCoordinator, annotate_events, explain_bin, read_json, summarize_events,
+    DiagnosticMixCoordinator,
+    annotate_events,
+    explain_bin,
+    read_json,
+    summarize_events,
 )
 from wcfi_tools.audio.mix_coordinator import (
-    CoordinatorSettings, MixCoordinator, SUPPORT_TRACKS, TRACKS,
+    SUPPORT_TRACKS,
+    TRACKS,
+    CoordinatorSettings,
+    MixCoordinator,
 )
 
 
 def settings(**kwargs):
-    values = dict(baseline_gains_db={t: 0. for t in TRACKS},
-                  reference_support_to_lead_db={t: -10. for t in SUPPORT_TRACKS},
-                  activity_thresholds_dbfs={t: -60. for t in TRACKS})
+    values = {"baseline_gains_db": {t: 0. for t in TRACKS},
+              "reference_support_to_lead_db": {t: -10. for t in SUPPORT_TRACKS},
+              "activity_thresholds_dbfs": {t: -60. for t in TRACKS}}
     values.update(kwargs)
     return CoordinatorSettings(**values)
 
@@ -139,10 +146,10 @@ def test_cli_refuses_overwrite_and_reads_only_json(tmp_path):
     report.write_text(json.dumps({"protocol": {"coordinator_settings": settings().as_dict()}}))
     command = [sys.executable, "-m", "wcfi_tools.audio.coordinator_diagnostics", str(decisions),
                "--report", str(report), "--output", str(output)]
-    first = subprocess.run(command, capture_output=True, text=True)
+    first = subprocess.run(command, capture_output=True, text=True, check=False)
     assert first.returncode == 0, first.stderr
     before = output.read_bytes()
-    second = subprocess.run(command, capture_output=True, text=True)
+    second = subprocess.run(command, capture_output=True, text=True, check=False)
     assert second.returncode != 0
     assert output.read_bytes() == before
 

@@ -1,7 +1,6 @@
 """Regression tests for offline fixed master trim; no user audio or host actions."""
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 
@@ -9,10 +8,10 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from wcfi_tools.audio import mix_fixed_headroom_v5 as v5
-from wcfi_tools.audio import mix_objective_audit as v1
 from wcfi_tools.audio import mix_candidate_explorer_v3 as v3
 from wcfi_tools.audio import mix_fault_authority_v4 as v4
+from wcfi_tools.audio import mix_fixed_headroom_v5 as v5
+from wcfi_tools.audio import mix_objective_audit as v1
 
 
 def base():
@@ -118,7 +117,7 @@ def test_frozen_master_run_outputs_only_json_and_does_not_choose(tmp_path,monkey
 
 
 def test_prior_hash_tamper_rejected_before_new_output(tmp_path,monkeypatch):
-    tf,af,vf,ff,paths,verified=fixture_reports(tmp_path)
+    tf,af,vf,ff,_paths,verified=fixture_reports(tmp_path)
     monkeypatch.setattr(v1,'_check_source_files',lambda _:verified)
     v4r=json.loads(ff.read_text())
     v4r['protocol']['v3_sha256']='0'*64

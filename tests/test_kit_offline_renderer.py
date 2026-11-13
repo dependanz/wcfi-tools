@@ -119,7 +119,7 @@ def test_complete_small_renderer_uses_only_kit_and_preserves_source_files(tmp_pa
                 original_stats, legacy, candidate)
     monkeypatch.setattr(renderer, "preflight", fake_preflight)
     def fake_scan(path, ffmpeg):
-        samples, rate = sf.read(path, always_2d=True, dtype="float64")
+        samples, _rate = sf.read(path, always_2d=True, dtype="float64")
         rms = np.sqrt(np.mean(samples**2))
         return {"integrated_lufs": float(20*math.log10(max(rms, 1e-12))),
                 "true_peak_dbtp": float(20*math.log10(max(np.max(np.abs(samples)), 1e-12)))}
