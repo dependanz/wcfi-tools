@@ -8,15 +8,15 @@ fingerprints prevent all output. Never infer that a channel is a singer.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
-from collections import Counter, deque
 import hashlib
 import json
 import math
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from collections import deque
+from contextlib import ExitStack
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -40,7 +40,7 @@ def _stats(values):
         return {"status": "unavailable", "count": 0, "p10_db": None, "median_db": None, "p90_db": None}
     if not np.isfinite(a).all():
         raise ValueError("Nonfinite feature")
-    return {"status": "measured", "count": int(len(a)), "p10_db": float(np.percentile(a,10)),
+    return {"status": "measured", "count": len(a), "p10_db": float(np.percentile(a,10)),
             "median_db": float(np.median(a)), "p90_db": float(np.percentile(a,90))}
 
 
@@ -169,7 +169,7 @@ def source_saturation(reader, frames, *, rate=RATE):
         if ongoing is None: ongoing=0
         for flag in frame_flags:
             ongoing=ongoing+1 if flag else 0
-            if ongoing>maximum:maximum=ongoing
+            maximum=max(maximum,ongoing)
         remaining-=len(x)
     return {"full_scale_sample_count":count,"full_scale_sample_count_by_channel":per_channel,
             "max_consecutive_full_scale_frames":int(maximum),
@@ -194,11 +194,11 @@ def vocal_channel_evidence(readers, n_bins, *, threshold_red, calibration_noise=
     raw={t:[] for t in ("RED","YELLOW","GREEN")}
     spectra={t:[] for t in raw}
     for i in range(n_bins):
-        for t in raw:
+        for t, entries in raw.items():
             x=readers[t].read(4800,dtype="float32",always_2d=True)
             if len(x)!=4800 or not np.isfinite(x).all():
                 raise ValueError("Invalid vocal evidence input")
-            raw[t].append(float(np.mean(x.astype(float)**2)))
+            entries.append(float(np.mean(x.astype(float)**2)))
             spectra[t].append(_speech_fft(x))
     red=np.asarray(raw["RED"])
     red_db=v1._db_power(red)
@@ -386,8 +386,8 @@ def run(report_path, output, *, audit_path=None, ffmpeg=None):
     with ExitStack() as stack:
         readers={t:stack.enter_context(sf.SoundFile(sources[t]["path"],"r")) for t in v1.TRACKS}
         for reader in readers.values():reader.seek(eval_start)
-        features,powers,source_peak,mix_peak,mix_rms = v1._capture_features(readers,rate,length,variants)
-        results,selection=v1.evaluate_objectives(features,powers,variants,settings["activity_thresholds_dbfs"],
+        features,powers,_source_peak,mix_peak,mix_rms = v1._capture_features(readers,rate,length,variants)
+        results,_selection=v1.evaluate_objectives(features,powers,variants,settings["activity_thresholds_dbfs"],
              mix_peak=mix_peak,mix_power_sum=mix_rms,frames_per_bin=4800)
         readers["KIT"].seek(eval_start)
         flux,energy=kit_flux_10ms(readers["KIT"],length)
@@ -402,7 +402,7 @@ def run(report_path, output, *, audit_path=None, ffmpeg=None):
         for reader in readers.values():reader.seek(eval_start)
         ffmpeg_results=_scan_ffmpeg_pipe(readers,variants,ffmpeg=ffmpeg,frames=length,evaluation_start=eval_start)
     # Source identity and metadata checks before committing output.
-    for t,meta in sources.items():
+    for meta in sources.values():
         st=Path(meta["path"]).stat()
         if st.st_size!=meta["size"] or st.st_mtime_ns!=meta["mtime_ns"]:
             raise ValueError("A source changed during audit")

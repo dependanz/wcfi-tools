@@ -7,11 +7,11 @@ No playback, host connection, network, waveform export, or gain application.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, deque
-from dataclasses import dataclass
 import hashlib
 import json
 import math
+from collections import Counter, deque
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -162,9 +162,8 @@ def evaluate(powers, reference, settings, scenario):
     evidence = PairEvidence(reference, settings)
     for index, original in enumerate(powers):
         row = np.asarray(original, dtype=np.float64).copy()
-        if scenario == "kit_step_plus10" and 200 <= index < 500:
-            row[1] *= 10.
-        elif scenario == "kit_single_hit_plus10" and index == 200:
+        if ((scenario == "kit_step_plus10" and 200 <= index < 500)
+                or (scenario == "kit_single_hit_plus10" and index == 200)):
             row[1] *= 10.
         elif scenario == "lead_pause" and 200 <= index < 250:
             row[0] = 0.

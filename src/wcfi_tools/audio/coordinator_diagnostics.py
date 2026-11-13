@@ -7,15 +7,15 @@ No audio device, host, network, or playback code is imported here.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
-from copy import deepcopy
 import hashlib
 import json
 import math
+from collections import Counter
+from collections.abc import Iterable
+from copy import deepcopy
 from pathlib import Path
-from typing import Iterable
 
-from .mix_coordinator import CoordinatorSettings, MixCoordinator, SUPPORT_TRACKS, TRACKS
+from .mix_coordinator import SUPPORT_TRACKS, TRACKS, CoordinatorSettings, MixCoordinator
 
 DIAGNOSTICS_VERSION = "coordinator_diagnostics_v1"
 BALANCE_REASONS = frozenset({
@@ -177,7 +177,7 @@ def main():
         settings = CoordinatorSettings(**report["protocol"]["coordinator_settings"])
         events = read_json(args.decisions)
         if not isinstance(events, list):
-            raise ValueError("Expected a JSON array of coordinator events")
+            raise ValueError("Expected a JSON array of coordinator events")  # noqa: TRY004
         result = summarize_events(events, settings)
         result["inputs"] = {"decisions_sha256": sha256(args.decisions),
                             "report_sha256": sha256(args.report)}

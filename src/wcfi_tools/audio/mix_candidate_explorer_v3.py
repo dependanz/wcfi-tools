@@ -7,10 +7,10 @@ Physical energy margins are descriptive proxies, not perceptual assessments.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import hashlib
 import json
 import math
+from contextlib import ExitStack
 from pathlib import Path
 
 import numpy as np
@@ -220,7 +220,7 @@ def run(report_path, v2_path, output, *, audit_path, ffmpeg):
         if saturation["full_scale_sample_count"] != v2_report["saturation"]["KIT"]["full_scale_sample_count"]:
             raise ValueError("KIT saturation evidence does not match v2")
         for reader in readers.values():reader.seek(ev_start)
-        features,powers,stem_peaks,raw_peaks,raw_rms=v1._capture_features(readers,rate,length,variants)
+        features,powers,_stem_peaks,raw_peaks,raw_rms=v1._capture_features(readers,rate,length,variants)
         objectives,_=v1.evaluate_objectives(features,powers,variants,
             trial["protocol"]["coordinator_settings"]["activity_thresholds_dbfs"],
             mix_peak=raw_peaks,mix_power_sum=raw_rms,frames_per_bin=4800)

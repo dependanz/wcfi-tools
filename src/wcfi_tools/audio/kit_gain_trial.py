@@ -8,14 +8,19 @@ certify safe or perceptually preferable mixing.
 from __future__ import annotations
 
 import argparse
-from collections import Counter
 import json
 import math
+from collections import Counter
 from pathlib import Path
 
 from .coordinator_diagnostics import BALANCE_REASONS, read_json, sha256
 from .kit_observation_trial import (
-    PAIR, SCENARIOS, PairReference, calibrate_500ms, evaluate, load_pair,
+    PAIR,
+    SCENARIOS,
+    PairReference,
+    calibrate_500ms,
+    evaluate,
+    load_pair,
 )
 from .mix_coordinator import CoordinatorSettings
 
@@ -168,7 +173,7 @@ def verify_saved_100ms(evaluation, saved_decisions, reference, settings):
     """Fail closed if this run's 100 ms measurements disagree with frozen evidence."""
     prior = read_json(saved_decisions)
     if not isinstance(prior, list):
-        raise ValueError("Saved decisions must be a JSON array")
+        raise ValueError("Saved decisions must be a JSON array")  # noqa: TRY004
     legacy = [item for item in prior if item.get("type") == "bin"]
     replay = list(evaluate(evaluation, reference, settings, "original"))
     if len(legacy) != len(replay):
@@ -237,7 +242,7 @@ def run_study(report_path: Path, decisions_path: Path, output_dir: Path) -> dict
         comparisons[name] = {}
         for scenario in SCENARIOS:
             trace_file = output_dir / f"{name}-{scenario}-gain.jsonl"
-            def rows():
+            def rows(trace_file=trace_file, reference=reference, scenario=scenario):
                 with trace_file.open("x", encoding="utf-8", newline="\n") as destination:
                     for row in simulate(evaluation, reference, settings, scenario):
                         destination.write(json.dumps(row, allow_nan=False) + "\n")

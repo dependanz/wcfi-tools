@@ -7,10 +7,10 @@ speech-intelligibility, singer-identity, or perceptual quality measurements.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import hashlib
 import json
 import math
+from contextlib import ExitStack
 from pathlib import Path
 
 import numpy as np
@@ -72,7 +72,7 @@ def _source_windows(report):
 
 def _check_source_files(report):
     """Preflight ALL stems (hashing exactly calibration+evaluation) before output."""
-    rate, cal_start, cal_end, ev_end, sources = _source_windows(report)
+    rate, cal_start, _cal_end, ev_end, sources = _source_windows(report)
     details = {}
     for track in TRACKS:
         metadata = sources[track]
@@ -184,7 +184,7 @@ def _select_onsets(raw_band_powers, raw_rms, baseline_kit_db, kit_threshold_dbfs
     eligible = np.flatnonzero(active & (flux > 0))
     if len(eligible) == 0:
         return np.array([], dtype=np.int64), flux, int(np.sum(active))
-    count = max(1, int(math.ceil(len(eligible) * 0.10)))
+    count = max(1, math.ceil(len(eligible) * 0.10))
     sorted_idx = eligible[np.argsort(-flux[eligible], kind="stable")[:count]]
     return np.sort(sorted_idx), flux, int(np.sum(active))
 
@@ -203,12 +203,11 @@ def evaluate_objectives(features, powers, variants, activity_thresholds,
     static = variants["frozen_static"]
     n = len(f)
     red_active = _db_power(r[:, INDEX["RED"]]) + static[INDEX["RED"]] >= activity_thresholds["RED"]
-    onset_indices, flux, kit_active = _select_onsets(
+    onset_indices, _flux, kit_active = _select_onsets(
         f[:, INDEX["KIT"]], r[:, INDEX["KIT"]],
         static[INDEX["KIT"]], activity_thresholds["KIT"])
     spec_names = list(BANDS_HZ)
     speech_idx, drum_idx = spec_names.index("speech_300_4500"), spec_names.index("drum_80_7000")
-    name_to_idx = INDEX
     result = {}
     for name, gain in variants.items():
         gains = np.asarray(gain, dtype=np.float64)
@@ -241,8 +240,8 @@ def evaluate_objectives(features, powers, variants, activity_thresholds,
             ev = onset_indices[(onset_indices >= start) & (onset_indices < stop)]
             segments[label] = {
                 "bins": int(stop - start),
-                "red_activity_bins": int(len(valid_red)),
-                "selected_kit_attack_candidates": int(len(ev)),
+                "red_activity_bins": len(valid_red),
+                "selected_kit_attack_candidates": len(ev),
                 "lead_vs_all_stems_speech_band_db": _summary(lead_margin[valid_red]),
                 "lead_vs_instruments_speech_band_db": _summary(lead_inst_margin[valid_red]),
                 "backing_vs_red_speech_band_db_unverified_identity": _summary(backing_margin[valid_red]),
@@ -262,7 +261,7 @@ def evaluate_objectives(features, powers, variants, activity_thresholds,
             "global": {
                 "red_activity_bins": int(np.sum(red_active)),
                 "kit_active_bins": kit_active,
-                "selected_kit_attack_candidates": int(len(onset_indices)),
+                "selected_kit_attack_candidates": len(onset_indices),
                 "lead_vs_all_stems_speech_band_db": _summary(lead_margin[red_active]),
                 "lead_vs_instruments_speech_band_db": _summary(lead_inst_margin[red_active]),
                 "backing_vs_red_speech_band_db_unverified_identity": _summary(backing_margin[red_active]),
@@ -271,7 +270,7 @@ def evaluate_objectives(features, powers, variants, activity_thresholds,
             "segments": segments,
         }
     return result, {"red_active_bins": int(np.sum(red_active)), "kit_active_bins": kit_active,
-                    "kit_attack_candidates": int(len(onset_indices)),
+                    "kit_attack_candidates": len(onset_indices),
                     "kit_attack_selection": "strongest 10 percent positive source-only 100ms spectral-flux bins, among KIT-active bins",
                     "selected_attack_bin_indices": onset_indices.tolist(),
                     "no_inferred_beat_or_instrument_identity": True}
@@ -306,7 +305,7 @@ def run(report_path: Path, output: Path, audit_path: Path | None = None):
             reader = stack.enter_context(sf.SoundFile(sources[name]["path"], mode="r"))
             reader.seek(start)
             readers[name] = reader
-        features, rms, stems_peak, mix_peak, mix_power_sum = _capture_features(readers, rate, end - start, variants)
+        features, rms, _stems_peak, mix_peak, mix_power_sum = _capture_features(readers, rate, end - start, variants)
     # Source state rechecked before any output directory creation.
     for name, meta in sources.items():
         st = Path(meta["path"]).stat()

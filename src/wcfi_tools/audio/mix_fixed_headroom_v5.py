@@ -7,20 +7,19 @@ to FFmpeg's null sink: no WAV files, host writes, monitoring or automatic gains.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import hashlib
 import json
 import math
-from pathlib import Path
 import subprocess
 import tempfile
+from contextlib import ExitStack
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from . import mix_objective_audit as v1
 from . import mix_fault_authority_v4 as v4
-from . import mix_candidate_explorer_v3 as v3
+from . import mix_objective_audit as v1
 
 TARGET_LUFS = -24.0  # a TEST LEVEL; not automatically appropriate for church audio
 EXPECTED_SCENARIOS = tuple(v4.SCENARIOS)

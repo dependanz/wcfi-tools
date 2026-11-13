@@ -7,20 +7,19 @@ It applies no limiter, compression, spectral processing, or host automation.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
-from tempfile import TemporaryDirectory
 import hashlib
 import json
 import math
+from contextlib import ExitStack
 from pathlib import Path
-import shutil
+from tempfile import TemporaryDirectory
 
 import numpy as np
 import soundfile as sf
 
+from .kit_study import scan_loudness
 from .mix_coordinator import TRACKS
 from .mix_coordinator_trial import validate_sources
-from .kit_study import scan_loudness
 
 RATE = 48_000
 BIN = RATE // 10
@@ -249,7 +248,7 @@ def render(report_path: Path, audit_path: Path, decisions_path: Path,
            gain_run: Path, output: Path, ffmpeg: Path) -> dict:
     if output.exists():
         raise ValueError("Output directory exists; choose a new immutable experiment directory")
-    report, gain_summary, paths, hashes, original_stats, legacy, candidate = preflight(
+    report, _gain_summary, paths, hashes, original_stats, _legacy, candidate = preflight(
         report_path, audit_path, decisions_path, gain_run, ffmpeg)
     start, end = report["protocol"]["evaluation_source_frames"]
     frames_total = end - start

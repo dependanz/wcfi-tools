@@ -9,20 +9,20 @@ uniform-cut policy, not a universal impossibility certificate.
 from __future__ import annotations
 
 import argparse
-from contextlib import ExitStack
 import hashlib
 import json
 import math
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from contextlib import ExitStack
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from . import mix_objective_audit as v1
 from . import mix_candidate_explorer_v3 as v3
+from . import mix_objective_audit as v1
 
 RATE = 48000
 BIN = RATE // 10
@@ -160,7 +160,7 @@ def parse_r128_summary(log):
     if not l or not p:raise ValueError("FFmpeg loudness/true peak missing")
     values=(float(l[1]),float(p[1]))
     if not all(math.isfinite(x) for x in values):raise ValueError("Nonfinite R128 result")
-    return dict(integrated_lufs=values[0],true_peak_dbtp=values[1])
+    return {"integrated_lufs": values[0], "true_peak_dbtp": values[1]}
 
 
 def scan_stress(readers,gains,scenario,*,evaluation_start,ffmpeg,rate=RATE):
@@ -236,7 +236,7 @@ def run(report_path,v3_path,audit_path,ffmpeg,output):
             raise ValueError("Source provenance path mismatch")
     verified=v1._check_source_files(trial)
     frontier,grid=verify_prior(v3_result,trial,audit_bytes,verified)
-    rate,_,_,end,sources=v1._source_windows(trial)
+    _rate,_,_,end,sources=v1._source_windows(trial)
     start=trial["protocol"]["evaluation_source_frames"][0]
     if end-start!=RATE*120:raise ValueError("Wrong evaluation duration")
     validate_controller_contract()
