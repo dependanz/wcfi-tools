@@ -27,6 +27,7 @@ from wcfi_tools.audio.mix_objective_audit_v2 import (
     vocal_channel_evidence,
 )
 
+
 class Reader:
     def __init__(self, x):
         self.wave=np.asarray(x,dtype='float32')
