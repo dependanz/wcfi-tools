@@ -127,3 +127,19 @@ The source archive is **logically lossless for the parsed JSON backup**, not byt
 **Security and migration limits:** The archive is an *unencrypted* BLOB in a temporary local SQLite database on a trusted machine. Do not deploy it or use it as a production backup system without encryption-at-rest, key management, retention policy, audit controls, authorization review and durable restore/recovery tests. The original backup is still the authoritative copy. Archive preservation does **not** mean the full browser-specific data is usable in the live shared-domain model, nor that production migration is lossless.
 
 Run the synthetic-only archive checks with `python -m unittest discover -s prototypes/music-ministry/tests -p test_phase3_source_archive.py -v`.
+
+## Private per-member preference projection (Phase 3)
+
+The full source archive remains authoritative for all V19 browser values. This follow-up adds a narrower **active application projection** for personal chart settings: `hub.keys` (per-song display transposition), `hub.font` (chart font size), and `hub.lyrics` (lyrics-only mode). Settings in the browser-local `wcfi-music-hub-v2` record are validated before staging. Other authoring fields, demo lineups, ordering metadata, browser-local draft details, and arbitrary keys remain preserved in the source archive, **not silently discarded as source material**.
+
+Domain table: `member_preferences(subject PRIMARY KEY, payload, version, updated_at)`. Domain methods `get_member_preferences(verified_subject)` and `update_member_preferences(verified_subject, prefs, expected_revision)` require approved membership and only access the authenticated member's own row; the caller cannot pass another target account. The update operation uses optimistic revision checks for concurrency. Invalid preferences fail instead of being silently rewritten. Personal display keys may refer to songs not yet present in the shared database; they do not grant access to those songs.
+
+The isolated V19 staging operation now writes the imported account's active preferences in the **same SQLite transaction** as the private backup archive and normalized draft records. It runs under a synthetic administrator only in the disposable rehearsal; real identity mapping and permission checks remain unimplemented. The rehearsal reads back the preferences, verifies exact mapped values and confirms the synthetic ordinary member's preferences are separate.
+
+The source archive is still a local, unencrypted development BLOB. **This does not constitute a production-ready durable archive or a lossless application migration.** The archival copy logically preserves complete source data, but other browser-specific properties have not been promoted to live shared-app fields. Do not configure Wix, use real login credentials, or delete any original browser data based on these tests.
+
+Run the synthetic checks:
+
+~~~powershell
+& .\.venv\Scripts\python.exe -m unittest discover -s .\prototypes\music-ministry\tests -p test_phase3_member_preferences.py -v
+~~~
