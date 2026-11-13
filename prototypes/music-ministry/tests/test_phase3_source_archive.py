@@ -88,6 +88,15 @@ class SourceArchiveTests(unittest.TestCase):
         unchanged = copy.deepcopy(doc)
         digest, result = self._stage(doc)
         self.assertTrue(result["source_backup_archived"])
+        self.assertTrue(result["personal_preferences_staged"])
+        self.assertEqual(result["personal_display_key_count"], 1)
+        self.assertEqual(self.store.get_member_preferences("fixture-admin"), {
+            "keys": {"fixture-song": "C"},
+            "font": 23, "lyrics": True, "revision": 1,
+        })
+        self.assertEqual(self.store.get_member_preferences("fixture-member"), {
+            "keys": {}, "font": 21, "lyrics": False, "revision": 0,
+        })
         self.assertEqual(doc, unchanged)
         restored = read_v19_source_archive(self.store, "fixture-admin", digest)
         self.assertEqual(restored, unchanged)

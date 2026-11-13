@@ -20,6 +20,7 @@ from shared_store import (
     VersionConflict,
     _json,
     _utc,
+    extract_v19_member_preferences,
     validate_lineup,
     validate_song,
 )
@@ -89,9 +90,20 @@ def _validated_parts(envelope: object) -> tuple[list[dict], list[dict], str, int
     return songs, lineups, hashlib.sha256(_canonical_bytes(envelope)).hexdigest(), len(demos)
 
 
+def _v19_personal_preferences(envelope: dict) -> dict:
+    """Validate personal display settings before any SQLite transaction begins."""
+    rows = {row["key"]: row["value"] for row in envelope["records"]}
+    try:
+        hub = json.loads(rows["wcfi-music-hub-v2"], object_pairs_hook=_no_duplicate_fields)
+    except (ValueError, TypeError) as exc:
+        raise InvalidRecord("Invalid browser preferences source") from exc
+    return extract_v19_member_preferences(hub)
+
+
 def prepare_v19_draft_stage(envelope: object) -> dict:
     """Read-only preview. No contents, identifiers, lyrics or private notes returned."""
     songs, lineups, digest, excluded_demos = _validated_parts(envelope)
+    preferences = _v19_personal_preferences(envelope)
     return {
         "source_sha256": digest,
         "songs_to_stage": len(songs),
@@ -100,6 +112,8 @@ def prepare_v19_draft_stage(envelope: object) -> dict:
         "demo_lineups_excluded": excluded_demos,
         "target_state": "draft_only",
         "approved_or_published": 0,
+        "personal_preferences_ready": True,
+        "personal_display_key_count": len(preferences["keys"]),
     }
 
 
@@ -147,6 +161,7 @@ def stage_v19_drafts(
     if confirmed is not True:
         raise NotAuthorized("Explicit staging confirmation required")
     songs, lineups, digest, excluded_demos = _validated_parts(envelope)
+    preferences = _v19_personal_preferences(envelope)
     if not isinstance(reviewed_sha256, str) or not hmac.compare_digest(reviewed_sha256, digest):
         raise VersionConflict("The inspected backup has changed; review it again")
     with store._connection() as db:
@@ -161,6 +176,11 @@ def stage_v19_drafts(
                 "INSERT INTO migration_source_archives "
                 "(source_sha256,canonical_backup,owner,created_at) VALUES(?,?,?,?)",
                 (digest, sqlite3.Binary(canonical_backup), verified_admin, _utc()),
+            )
+            db.execute(
+                "INSERT INTO member_preferences(subject,payload,version,updated_at) "
+                "VALUES(?,?,1,?)",
+                (verified_admin, _json(preferences), _utc()),
             )
             for item in songs:
                 db.execute(
@@ -182,5 +202,7 @@ def stage_v19_drafts(
         "lineups_staged": len(lineups),
         "demo_lineups_excluded": excluded_demos,
         "source_backup_archived": True,
+        "personal_preferences_staged": True,
+        "personal_display_key_count": len(preferences["keys"]),
         "target_state": "draft_only",
     }

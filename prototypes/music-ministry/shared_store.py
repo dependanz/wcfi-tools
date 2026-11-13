@@ -124,6 +124,39 @@ def validate_lineup(value: object, *, require_date: bool = False) -> dict:
     return {"id": value["id"], "title": title.strip(), "date": date, "notes": note, "songs": songs}
 
 
+def validate_member_preferences(value: object) -> dict:
+    """Narrow active preference projection. All additional browser state stays archived."""
+    if not isinstance(value, dict) or set(value) != {"keys", "font", "lyrics"}:
+        raise InvalidRecord("Invalid member preference fields")
+    raw_keys = value["keys"]
+    if not isinstance(raw_keys, dict) or len(raw_keys) > 1000:
+        raise InvalidRecord("Invalid personal display keys")
+    keys = {}
+    for song_id, key in raw_keys.items():
+        if (not isinstance(song_id, str) or not 1 <= len(song_id) <= 160 or
+                any(ord(char) < 32 for char in song_id) or
+                not isinstance(key, str) or not KEY.fullmatch(key)):
+            raise InvalidRecord("Invalid personal display key")
+        keys[song_id] = key
+    font = value["font"]
+    if type(font) is not int or not 18 <= font <= 28:
+        raise InvalidRecord("Invalid personal chart font size")
+    if type(value["lyrics"]) is not bool:
+        raise InvalidRecord("Invalid personal lyrics display flag")
+    return {"keys": keys, "font": font, "lyrics": value["lyrics"]}
+
+
+def extract_v19_member_preferences(hub: object) -> dict:
+    """Select only V19's active personal-display settings; don't import other keys."""
+    if not isinstance(hub, dict):
+        raise InvalidRecord("Invalid V19 browser hub state")
+    return validate_member_preferences({
+        "keys": hub.get("keys", {}),
+        "font": hub.get("font", 21),
+        "lyrics": hub.get("lyrics", False),
+    })
+
+
 class MusicStore:
     """Standalone SQLite domain store. No HTTP routes, cookies or OAuth flows."""
 
@@ -177,6 +210,12 @@ class MusicStore:
                 owner TEXT NOT NULL REFERENCES members(subject),
                 created_at TEXT NOT NULL
               );
+              CREATE TABLE IF NOT EXISTS member_preferences (
+                subject TEXT PRIMARY KEY REFERENCES members(subject),
+                payload TEXT NOT NULL,
+                version INTEGER NOT NULL CHECK(version>=1),
+                updated_at TEXT NOT NULL
+              );
             """)
 
     @staticmethod
@@ -203,6 +242,49 @@ class MusicStore:
                 ON CONFLICT(subject) DO UPDATE SET approved=excluded.approved, roles=excluded.roles, updated_at=excluded.updated_at""",
                        (subject, int(approved), _json(sorted(roles)), _utc()))
             self._audit(db, verified_admin, "membership_set", subject)
+
+    def get_member_preferences(self, verified_subject: str) -> dict:
+        """Approved members can read their own preferences, never another member's."""
+        with self._connection() as db:
+            self._actor(db, verified_subject, {"member", "song_editor", "worship_leader"})
+            row = db.execute(
+                "SELECT payload,version FROM member_preferences WHERE subject=?",
+                (verified_subject,),
+            ).fetchone()
+            if row is None:
+                return {"keys": {}, "font": 21, "lyrics": False, "revision": 0}
+            return {**json.loads(row["payload"]), "revision": row["version"]}
+
+    def update_member_preferences(
+        self, verified_subject: str, preferences: object, expected_revision: int,
+    ) -> int:
+        """Per-member optimistic concurrency; caller has no target-subject override."""
+        clean = validate_member_preferences(preferences)
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise InvalidRecord("Invalid preferences revision")
+        with self._connection() as db:
+            self._actor(db, verified_subject, {"member", "song_editor", "worship_leader"})
+            if expected_revision == 0:
+                try:
+                    db.execute(
+                        "INSERT INTO member_preferences(subject,payload,version,updated_at) "
+                        "VALUES(?,?,1,?)",
+                        (verified_subject, _json(clean), _utc()),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise VersionConflict("Preferences changed on another device") from exc
+                revision = 1
+            else:
+                changed = db.execute(
+                    "UPDATE member_preferences SET payload=?, version=version+1, "
+                    "updated_at=? WHERE subject=? AND version=?",
+                    (_json(clean), _utc(), verified_subject, expected_revision),
+                )
+                if changed.rowcount != 1:
+                    raise VersionConflict("Preferences changed on another device")
+                revision = expected_revision + 1
+            self._audit(db, verified_subject, "member_preferences_updated", verified_subject)
+            return revision
 
     def list_songs(self, verified_subject: str) -> list[dict]:
         with self._connection() as db:
