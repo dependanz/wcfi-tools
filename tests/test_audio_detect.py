@@ -1,11 +1,11 @@
 """CLI/stream integration with deterministic audio, never a real microphone."""
 import json
+import re
 from contextlib import contextmanager
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from click import unstyle
 from typer.testing import CliRunner
 
 from wcfi_tools.audio.howler_monitor import monitor
@@ -37,7 +37,7 @@ def test_cli_help():
     result = runner.invoke(app, ["audio", "detect", "howler", "--help"])
     assert result.exit_code == 0, result.output
     # Rich may insert ANSI styling inside option names on Linux CI.
-    help_text = unstyle(result.output)
+    help_text = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
     assert "--device" in help_text
     assert "--threshold-db" in help_text
 
