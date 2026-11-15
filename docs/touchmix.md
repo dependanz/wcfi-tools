@@ -29,6 +29,27 @@ wcfi mixer touchmix inspect --host 10.2.2.4
 
 The address above is only an example from the current local experiment. Inspect downloads XML **into RAM**, parses faders and indices, then disconnects. The printed XML dB values are a configuration snapshot, not proven real-time readback.
 
+## Diagnostic: configuration timeout after an earlier successful read
+
+When a connection times out during configuration retrieval, **no parameter
+write has occurred**. Do not interpret a failed `--apply` invocation as a
+fader movement, and do not repeatedly retry experimental writes.
+
+Update the feature branch and use a read-only trace, preferably after closing
+the official mobile app's remote session:
+
+```powershell
+git pull --ff-only
+python -m pytest -q tests/test_touchmix.py
+wcfi mixer touchmix inspect --host 10.2.2.4 --timeout 30 --trace 1>$null
+```
+
+The tracing output deliberately includes only message kind/subtype counts,
+elapsed time, and compressed-transfer progress—not the actual private
+configuration. It tells us whether the mixer returned a `2/2` acknowledgment,
+started `3/4` configuration chunks, or stayed silent. This does not send
+any fader command or guarantee that a future write is accepted.
+
 ## Gated single-fader test
 
 By default this is **dry-run**: a plan is generated but no parameter-write frame is transmitted.
