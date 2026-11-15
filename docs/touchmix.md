@@ -126,10 +126,13 @@ The authorized iPhone capture contains more than a greeting and file transfer:
 the client emitted a `8/3` frame (18 bytes) and many `6/1` request frames,
 with `7/1` responses from the mixer. The current independent client does
 not reproduce those interactions. Their exact semantics, and whether they
-are required for write authorization, are **unknown**. The existing
-`send_test_fader` method sends one `5/1` frame and immediately closes
-its session; we have not checked for an acknowledgment, rejection, or later
-state update. A TCP `sendall` return only establishes local transmission.
+are required for write authorization, are **unknown**. The original
+`send_test_fader` method sent one `5/1` frame and immediately closed
+its session. The current experimental command now holds the same connection
+open for up to 2 seconds by default, passively counting any server frames
+using `--observe-replies-seconds` (0 to 10). It transmits no additional
+commands and still cannot identify a write acknowledgment. A TCP `sendall`
+return only establishes local transmission.
 
 Before another real-mixer write, we should inspect these packets from the
 authorized capture and add passive post-write response observation to the
