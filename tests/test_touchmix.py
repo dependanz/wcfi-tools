@@ -249,3 +249,20 @@ def test_observe_is_read_only_and_reports_delta(monkeypatch):
     assert data["changed_by_at_least_0_01_db"] is True
     assert abs(data["delta_db_first_to_last"] - 7.890388) < 1e-4
     assert not writes
+
+
+def test_observe_after_one_write_does_not_resend_or_claim_ack():
+    sim = TouchMixSimulator(port=0)
+    ready = threading.Event()
+    thread = threading.Thread(target=sim.serve_once, kwargs={"ready": ready}, daemon=True)
+    thread.start()
+    assert ready.wait(timeout=2)
+    with TouchMixClient("127.0.0.1", sim.port, allow_loopback=True) as client:
+        info, faders = client.retrieve_configuration()
+        result = client.send_test_fader("In 1", 0.55, info, faders,
+                                        observe_replies_seconds=0.05)
+        assert result["sent"] and not result["verified"]
+        assert result["post_write_frames_by_kind"] == {}
+        assert result["reply_observation_seconds"] == 0.05
+    thread.join(timeout=2)
+    assert len(sim.received_writes) == 1
