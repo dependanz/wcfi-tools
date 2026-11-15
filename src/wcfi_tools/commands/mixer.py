@@ -106,6 +106,7 @@ def observe(
                     "xml_db_snapshot": fader.xml_db,
                 })
             if i < samples - 1:
+                typer.echo(f"Snapshot {i + 1}/{samples} captured. Move the isolated physical fader during the next {interval:g} seconds if testing console-to-CLI observation.", err=True)
                 time.sleep(interval)
         indices = {r["parameter_index"] for r in readings}
         versions = {r["config_version"] for r in readings}
