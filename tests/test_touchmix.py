@@ -188,3 +188,24 @@ def test_timeout_reports_frame_stage_without_sending_parameter_write():
         with pytest.raises(TouchMixError, match="Configuration timeout:.*frames_by_kind"):
             client.retrieve_configuration()
     thread.join(timeout=2)
+
+
+def test_config_filename_can_have_variable_prefix():
+    import zlib
+    raw = synthetic_config()
+    compressed = zlib.compress(raw)
+    xfer = ConfigTransfer()
+    other = b"User.settings.dqx.dscomp"
+    xfer.add(Frame(3, 4, struct.pack("<IH", 0xFFFFFFFF, len(other)) + other))
+    xfer.add(Frame(3, 4, struct.pack("<IH", 0, 3) + b"abc"))
+    xfer.add(Frame(3, 4, struct.pack("<IH", 0xFFFFFFFE, 0)))
+    assert not xfer.seen_config
+    name = b"NH5-config.xml.dscomp"
+    xfer.add(Frame(3, 4, struct.pack("<IH", 0xFFFFFFFF, len(name)) + name))
+    assert xfer.seen_config and xfer.active
+    assert "NH5" not in str(xfer.last_marker)
+    xfer.add(Frame(3, 4, struct.pack("<IH", 0, len(compressed)) + compressed))
+    decoded = xfer.add(Frame(3, 4, struct.pack("<IH", 0xFFFFFFFE, 0)))
+    assert decoded == raw
+    assert xfer.marker_count == 4
+    assert xfer.last_marker["config_candidate"] is True
