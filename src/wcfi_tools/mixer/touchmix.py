@@ -232,8 +232,13 @@ def _validate_target(host: str, *, allow_loopback: bool = False) -> None:
         ip = ipaddress.ip_address(host)
     except ValueError as exc:
         raise TouchMixError("Use a literal private IPv4 address, not a DNS name") from exc
-    if ip.version != 4 or not (ip.is_private and (allow_loopback or not ip.is_loopback)):
-        raise TouchMixError("Only private IPv4 LAN mixer addresses are permitted")
+    rfc1918 = any(ip in network for network in (
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+    ))
+    if ip.version != 4 or not (rfc1918 or (allow_loopback and ip.is_loopback)):
+        raise TouchMixError("Only RFC1918 IPv4 mixers (or explicit loopback simulator) are allowed")
 
 
 class TouchMixClient:
