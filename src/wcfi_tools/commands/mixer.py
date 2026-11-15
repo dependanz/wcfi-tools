@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Annotated
 
 import typer
@@ -67,6 +68,55 @@ def inspect(
                                                   f.parameter_index == OBSERVED_INPUT_FADERS[f.channel][0])}
                         for f in faders.values()],
                     "note": "XML configuration values are a snapshot, not proven live readback"})
+    except (TouchMixError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@touchmix_app.command("observe")
+def observe(
+    channel: Annotated[str, typer.Option(help="Exact channel name, e.g., 'In 1'.")],
+    host: Annotated[str, typer.Option(help="Literal private IPv4 mixer address.")],
+    port: Annotated[int, typer.Option(min=1, max=65535)] = DEFAULT_PORT,
+    samples: Annotated[int, typer.Option(min=2, max=5, help="Number of separate configuration snapshots.")] = 2,
+    interval: Annotated[float, typer.Option(min=0, max=30, help="Seconds between samples; move the console fader during this interval.")] = 8.0,
+    timeout: Annotated[float, typer.Option(min=0.25, max=60)] = 30.0,
+    simulator: Annotated[bool, typer.Option("--simulator", help="Explicitly allow a localhost simulator.")] = False,
+) -> None:
+    """Observe a channel across separate configuration downloads; never sends parameter writes.
+
+    XML values are configuration snapshots, not independently proven live fader readback.
+    """
+    try:
+        readings: list[dict[str, object]] = []
+        start = time.monotonic()
+        for i in range(samples):
+            with TouchMixClient(host, port, timeout=timeout,
+                                allow_loopback=simulator) as client:
+                config, faders = client.retrieve_configuration()
+                if channel not in faders:
+                    raise TouchMixError(f"Channel {channel!r} not found in mixer configuration")
+                fader = faders[channel]
+                if fader.xml_db is None:
+                    raise TouchMixError(f"Channel {channel!r} has no numeric XML level")
+                readings.append({
+                    "sample": i + 1,
+                    "elapsed_seconds": round(time.monotonic() - start, 2),
+                    "config_version": config["config_version"],
+                    "parameter_index": fader.parameter_index,
+                    "xml_db_snapshot": fader.xml_db,
+                })
+            if i < samples - 1:
+                time.sleep(interval)
+        indices = {r["parameter_index"] for r in readings}
+        versions = {r["config_version"] for r in readings}
+        if len(indices) != 1 or len(versions) != 1:
+            raise TouchMixError("Mixer parameter identity or version changed between samples")
+        first = readings[0]["xml_db_snapshot"]
+        last = readings[-1]["xml_db_snapshot"]
+        _print({"channel": channel, "read_only": True, "samples": readings,
+                "delta_db_first_to_last": round(last - first, 6),
+                "changed_by_at_least_0_01_db": abs(last - first) >= 0.01,
+                "note": "Configuration snapshots only; movement and causation require physical confirmation."})
     except (TouchMixError, OSError, ValueError) as exc:
         _fail(exc)
 
