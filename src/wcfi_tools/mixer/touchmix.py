@@ -9,6 +9,8 @@ This is not a qualified implementation for live service audio.
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 import ipaddress
 import math
@@ -272,23 +274,56 @@ class TouchMixClient:
             raise TouchMixError("Not connected")
         return {**self.greeting, "host": self.host, "port": self.port}
 
-    def retrieve_configuration(self) -> tuple[dict[str, object], dict[str, Fader]]:
+    def retrieve_configuration(self, *, trace: Callable[[dict[str, object]], None] | None = None
+                               ) -> tuple[dict[str, object], dict[str, Fader]]:
+        """Identify this client and read a fresh configuration; never write parameters.
+
+        The optional trace emits framing/transfer metadata, NOT mixer settings.
+        In particular, diagnostic timeouts are distinct from write outcomes.
+        """
         if self.sock is None:
             raise TouchMixError("Not connected")
         self.sock.sendall(pack_greeting(self.name).encode())
         transfer = ConfigTransfer()
         deadline = time.monotonic() + self.timeout
+        started = time.monotonic()
+        counts: Counter[str] = Counter()
+        last_event: str | None = None
+
+        def progress(stage: str) -> dict[str, object]:
+            return {
+                "stage": stage,
+                "elapsed_seconds": round(time.monotonic() - started, 2),
+                "frames_by_kind": dict(sorted(counts.items())),
+                "config_transfer_started": transfer.name == "NH4-config.xml.dscomp",
+                "config_compressed_bytes": len(transfer.content),
+                "last_frame": last_event,
+            }
+
+        if trace is not None:
+            trace(progress("client_greeting_sent"))
         while True:
             left = deadline - time.monotonic()
             if left <= 0:
-                raise TouchMixError("Timed out receiving configuration after client greeting")
+                raise TouchMixError(f"Configuration deadline reached: {progress('deadline')}")
             self.sock.settimeout(left)
             try:
                 frame = recv_frame(self.sock)
             except (TimeoutError, socket.timeout) as exc:
-                raise TouchMixError("Timeout receiving TouchMix configuration") from exc
+                raise TouchMixError(f"Configuration timeout: {progress('socket_timeout')}") from exc
+            except TouchMixError as exc:
+                raise TouchMixError(f"Configuration connection ended: {progress('connection_ended')}: {exc}") from exc
+            key = f"{frame.kind}/{frame.subtype}"
+            counts[key] += 1
+            last_event = key
+            previous_bytes = len(transfer.content)
             result = transfer.add(frame)
+            if trace is not None and (counts[key] == 1 or
+                                      len(transfer.content) // 16384 > previous_bytes // 16384):
+                trace(progress("frame_received"))
             if result is not None:
+                if trace is not None:
+                    trace(progress("configuration_complete"))
                 return parse_faders(result)
 
     def send_test_fader(self, channel: str, value: float, config: dict[str, object],
