@@ -8,6 +8,7 @@ from . import __version__
 from .commands import audio as audio_cmd
 from .commands import meeting as meeting_cmd
 from .commands import monitor_control as monitor_control_cmd
+from .commands import mixer as mixer_cmd
 from .commands import soundcheck as soundcheck_cmd
 from .commands.setup import setup as setup_command
 
@@ -22,6 +23,7 @@ app.add_typer(meeting_cmd.app, name="meeting")
 app.add_typer(soundcheck_cmd.app, name="soundcheck")
 app.add_typer(audio_cmd.app, name="audio")
 app.add_typer(monitor_control_cmd.app, name="monitor-control")
+app.add_typer(mixer_cmd.app, name="mixer")
 
 
 def _version_callback(value: bool) -> None:
