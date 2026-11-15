@@ -356,12 +356,38 @@ class TouchMixClient:
                 return parse_faders(result)
 
     def send_test_fader(self, channel: str, value: float, config: dict[str, object],
-                        faders: dict[str, Fader]) -> dict[str, object]:
+                        faders: dict[str, Fader], *,
+                        observe_replies_seconds: float = 0) -> dict[str, object]:
+        """Send one guarded candidate update and optionally inspect server frames.
+
+        Frame counts are diagnostics, NOT acknowledgements or proof of movement.
+        No further application messages are transmitted during observation.
+        """
         if self.sock is None:
             raise TouchMixError("Not connected")
+        if not math.isfinite(observe_replies_seconds) or not 0 <= observe_replies_seconds <= 10:
+            raise TouchMixError("Reply observation window must be 0..10 seconds")
         plan = plan_input_fader(channel, value, config, faders)
         _index, identifier = OBSERVED_INPUT_FADERS[channel]
         self.sock.sendall(pack_parameter_write(identifier, value).encode())
-        # TCP sendall completion is NOT mixer acceptance or proof of movement.
+
+        responses: Counter[str] = Counter()
+        peer_closed = False
+        deadline = time.monotonic() + observe_replies_seconds
+        while time.monotonic() < deadline and sum(responses.values()) < 500:
+            self.sock.settimeout(max(0.001, deadline - time.monotonic()))
+            try:
+                response = recv_frame(self.sock)
+            except (TimeoutError, socket.timeout):
+                break
+            except TouchMixError:
+                peer_closed = True
+                break
+            responses[f"{response.kind}/{response.subtype}"] += 1
+
+        # A 2/2 or 7/1 frame is not proven to acknowledge a 5/1 write.
         return {**plan, "sent": True, "verified": False,
+                "post_write_frames_by_kind": dict(sorted(responses.items())),
+                "post_write_peer_closed": peer_closed,
+                "reply_observation_seconds": observe_replies_seconds,
                 "result": "sent_unverified_check_physical_mixer"}
