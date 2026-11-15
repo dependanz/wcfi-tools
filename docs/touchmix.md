@@ -62,8 +62,11 @@ any fader command or guarantee that a future write is accepted.
 Three independent test writes were transmitted on 2026-11-15, but did not
 receive verified application-level acknowledgements. The pre-write XML
 configuration snapshot for In 1 changed from approximately -18.537 to
--10.647 dB between attempts. This alone does **not** establish that the
-software caused the change.
+-10.647 dB between attempts. **The operator confirmed this increase was a
+manual fader adjustment, not caused by WCFI-tools.** The subsequent two
+read-only snapshots both measured -10.64679 dB. Thus there is currently
+**no verified physical fader movement caused by our driver**. Do not mark a
+hardware-control checkpoint or infer write success from these observations.
 
 The new observe command sends NO parameter-update frames. It downloads a
 configuration snapshot, announces a pause, and downloads a second snapshot:
@@ -115,6 +118,23 @@ wcfi mixer touchmix fader --host 127.0.0.1 --port 58211 --simulator `
 ```
 
 The simulator prints any write it observed, but its acceptance is not evidence that the physical mixer accepts the same message.
+
+
+## Outstanding control-session question
+
+The authorized iPhone capture contains more than a greeting and file transfer:
+the client emitted a `8/3` frame (18 bytes) and many `6/1` request frames,
+with `7/1` responses from the mixer. The current independent client does
+not reproduce those interactions. Their exact semantics, and whether they
+are required for write authorization, are **unknown**. The existing
+`send_test_fader` method sends one `5/1` frame and immediately closes
+its session; we have not checked for an acknowledgment, rejection, or later
+state update. A TCP `sendall` return only establishes local transmission.
+
+Before another real-mixer write, we should inspect these packets from the
+authorized capture and add passive post-write response observation to the
+independent driver. Do not blindly replay unknown session frames or assume
+`0x6EF9` is a permanent parameter-ID namespace.
 
 ## Privacy and next steps
 
