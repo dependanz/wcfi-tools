@@ -12,8 +12,10 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+import hashlib
 import ipaddress
 import math
+import re
 import socket
 import struct
 import time
@@ -118,12 +120,21 @@ def _bounded_inflate(compressed: bytes) -> bytes:
 
 
 class ConfigTransfer:
-    """Collect only the captured named .dscomp file-transfer format in memory."""
+    """Read recognized config transfers; safely summarize other named file events.
+
+    A file's name may include a variable prefix. Do not log raw names: some
+    additional transferred files can contain personal user identifiers.
+    """
+
+    _CONFIG_NAME = re.compile(rb"[A-Za-z0-9_.-]{1,80}-config\.xml\.dscomp\Z")
 
     def __init__(self):
         self.active = False
         self.name: str | None = None
         self.content = bytearray()
+        self.seen_config = False
+        self.marker_count = 0
+        self.last_marker: dict[str, object] | None = None
 
     def add(self, frame: Frame) -> bytes | None:
         if (frame.kind, frame.subtype) != (3, 4):
@@ -134,13 +145,28 @@ class ConfigTransfer:
         chunk = frame.payload[6:]
         if len(chunk) < n:
             raise TouchMixError("Truncated file-transfer chunk")
-        chunk = chunk[:n]  # Completion frame can contain extra metadata.
+        chunk = chunk[:n]  # Completion frame may contain additional metadata.
         if offset == 0xFFFFFFFF:
+            config_candidate = self._CONFIG_NAME.fullmatch(chunk) is not None
             self.name = chunk.decode("utf-8", errors="replace")
-            self.active = self.name == "NH4-config.xml.dscomp"
+            self.active = config_candidate
+            self.seen_config |= config_candidate
             self.content.clear()
+            self.marker_count += 1
+            self.last_marker = {
+                "event": "file_start",
+                "name_sha12": hashlib.sha256(chunk).hexdigest()[:12],
+                "name_bytes": len(chunk),
+                "config_candidate": config_candidate,
+            }
             return None
         if offset == 0xFFFFFFFE:
+            self.marker_count += 1
+            self.last_marker = {
+                "event": "file_complete",
+                "config_candidate": self.active,
+                "compressed_bytes": len(self.content) if self.active else 0,
+            }
             if not self.active:
                 return None
             self.active = False
@@ -153,7 +179,6 @@ class ConfigTransfer:
             raise TouchMixError("Configuration transfer exceeds permitted size")
         self.content.extend(chunk)
         return None
-
 
 @dataclass(frozen=True)
 class Fader:
@@ -295,7 +320,9 @@ class TouchMixClient:
                 "stage": stage,
                 "elapsed_seconds": round(time.monotonic() - started, 2),
                 "frames_by_kind": dict(sorted(counts.items())),
-                "config_transfer_started": transfer.name == "NH4-config.xml.dscomp",
+                "config_transfer_started": transfer.seen_config,
+                "file_marker_count": transfer.marker_count,
+                "last_file_marker": transfer.last_marker,
                 "config_compressed_bytes": len(transfer.content),
                 "last_frame": last_event,
             }
@@ -317,8 +344,10 @@ class TouchMixClient:
             counts[key] += 1
             last_event = key
             previous_bytes = len(transfer.content)
+            previous_markers = transfer.marker_count
             result = transfer.add(frame)
             if trace is not None and (counts[key] == 1 or
+                                      transfer.marker_count != previous_markers or
                                       len(transfer.content) // 16384 > previous_bytes // 16384):
                 trace(progress("frame_received"))
             if result is not None:
