@@ -355,6 +355,58 @@ class TouchMixClient:
                     trace(progress("configuration_complete"))
                 return parse_faders(result)
 
+    def listen_server_frames(self, *, seconds: float = 10, limit: int = 500,
+                             max_examples: int = 24) -> dict[str, object]:
+        """Passively summarize incoming frames after configuration download.
+
+        No request/poll/write messages are sent. The absence of events does not
+        mean the mixer has no live state updates: the official client uses
+        additional requests that this experimental client does not send.
+        """
+        from .touchmix_observation import summarize_frame
+
+        if self.sock is None:
+            raise TouchMixError("Not connected")
+        if not math.isfinite(seconds) or not 0.1 <= seconds <= 30:
+            raise TouchMixError("Listen duration must be 0.1..30 seconds")
+        if not 1 <= limit <= 2000 or not 0 <= max_examples <= 100:
+            raise TouchMixError("Invalid listen limits")
+        end = time.monotonic() + seconds
+        counts: Counter[str] = Counter()
+        examples: list[dict[str, object]] = []
+        closed = False
+        errors = 0
+        while sum(counts.values()) < limit:
+            left = end - time.monotonic()
+            if left <= 0:
+                break
+            self.sock.settimeout(max(0.001, left))
+            try:
+                frame = recv_frame(self.sock)
+            except (TimeoutError, socket.timeout):
+                break
+            except TouchMixError:
+                closed = True
+                break
+            counts[f"{frame.kind}/{frame.subtype}"] += 1
+            try:
+                summary = summarize_frame(frame)
+            except TouchMixError:
+                errors += 1
+                summary = {"kind": frame.kind, "subtype": frame.subtype,
+                           "payload_bytes": len(frame.payload), "class": "invalid_candidate"}
+            if len(examples) < max_examples:
+                examples.append(summary)
+        return {
+            "read_only": True,
+            "seconds_requested": seconds,
+            "frames_by_kind": dict(sorted(counts.items())),
+            "examples": examples,
+            "invalid_candidate_frames": errors,
+            "peer_closed": closed,
+            "note": "Passive data only; 4/2 indices are unverified and no event is a write acknowledgment",
+        }
+
     def send_test_fader(self, channel: str, value: float, config: dict[str, object],
                         faders: dict[str, Fader], *,
                         observe_replies_seconds: float = 0) -> dict[str, object]:
