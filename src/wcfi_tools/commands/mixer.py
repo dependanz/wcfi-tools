@@ -122,6 +122,28 @@ def observe(
         _fail(exc)
 
 
+@touchmix_app.command("listen")
+def listen(
+    host: Annotated[str, typer.Option(help="Literal private IPv4 mixer address.")],
+    port: Annotated[int, typer.Option(min=1, max=65535)] = DEFAULT_PORT,
+    seconds: Annotated[float, typer.Option(min=0.1, max=30, help="Passive frame-listening window.")] = 10.0,
+    timeout: Annotated[float, typer.Option(min=0.25, max=60)] = 30.0,
+    max_examples: Annotated[int, typer.Option(min=0, max=100)] = 24,
+    simulator: Annotated[bool, typer.Option("--simulator", help="Allow local simulator only when explicitly requested.")] = False,
+) -> None:
+    """Listen for server messages after configuration transfer. No parameter writes or polls."""
+    try:
+        with TouchMixClient(host, port, timeout=timeout,
+                            allow_loopback=simulator) as client:
+            config, _faders = client.retrieve_configuration()
+            report = client.listen_server_frames(seconds=seconds,
+                                                 max_examples=max_examples)
+            _print({"device": client.identify(),
+                    "config_version": config["config_version"], **report})
+    except (TouchMixError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
 @touchmix_app.command("fader")
 def fader(
     channel: Annotated[str, typer.Option(help="Exact input name, e.g., 'In 1'.")],
