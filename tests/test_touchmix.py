@@ -209,3 +209,43 @@ def test_config_filename_can_have_variable_prefix():
     assert decoded == raw
     assert xfer.marker_count == 4
     assert xfer.last_marker["config_candidate"] is True
+
+
+def test_observe_is_read_only_and_reports_delta(monkeypatch):
+    import json
+    from typer.testing import CliRunner
+    from wcfi_tools.commands import mixer as cmd
+    from wcfi_tools.mixer.touchmix import Fader
+
+    current = iter((-18.53717803955078, -10.64678955078125))
+    writes = []
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def retrieve_configuration(self):
+            level = next(current)
+            return ({"config_version": "3.0.12462"},
+                    {"In 1": Fader("In 1", 1, 1227, level)})
+
+        def send_test_fader(self, *args):
+            writes.append(args)
+            raise AssertionError("Observe must never send a write")
+
+    monkeypatch.setattr(cmd, "TouchMixClient", FakeClient)
+    monkeypatch.setattr(cmd.time, "sleep", lambda _delay: None)
+    result = CliRunner().invoke(cmd.app, ["touchmix", "observe", "--host", "10.2.2.4",
+                                             "--channel", "In 1", "--samples", "2", "--interval", "0"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["read_only"] is True
+    assert data["changed_by_at_least_0_01_db"] is True
+    assert abs(data["delta_db_first_to_last"] - 7.890388) < 1e-4
+    assert not writes
