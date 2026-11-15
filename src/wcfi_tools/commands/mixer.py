@@ -130,6 +130,7 @@ def fader(
     port: Annotated[int, typer.Option(min=1, max=65535)] = DEFAULT_PORT,
     timeout: Annotated[float, typer.Option(min=0.25, max=60)] = 12.0,
     trace: Annotated[bool, typer.Option("--trace", help="Print sanitized frame progress to stderr.")] = False,
+    observe_replies_seconds: Annotated[float, typer.Option("--observe-replies-seconds", min=0, max=10, help="After --apply, listen for frames without sending additional commands; not a write acknowledgment.")] = 2.0,
     apply: Annotated[bool, typer.Option("--apply", help="Transmit one experimental fader frame; default is dry-run.")] = False,
     confirm_isolated: Annotated[bool, typer.Option("--confirm-isolated", help="Affirm this input is physically isolated and it is safe to move.")] = False,
     confirm_channel: Annotated[str | None, typer.Option(help="Repeat the exact input name to enable --apply.")] = None,
@@ -148,7 +149,8 @@ def fader(
                 _print({**plan, "sent": False, "verified": False,
                         "result": "dry_run_no_fader_write"})
             else:
-                _print(client.send_test_fader(channel, value, config, faders))
+                _print(client.send_test_fader(channel, value, config, faders,
+                                              observe_replies_seconds=observe_replies_seconds))
     except (TouchMixError, OSError, ValueError) as exc:
         _fail(exc)
 
