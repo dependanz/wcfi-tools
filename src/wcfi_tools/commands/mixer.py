@@ -48,12 +48,15 @@ def inspect(
     host: Annotated[str, typer.Option(help="Literal private IPv4 address of the mixer.")],
     port: Annotated[int, typer.Option(min=1, max=65535)] = DEFAULT_PORT,
     timeout: Annotated[float, typer.Option(min=0.25, max=60)] = 12.0,
+    trace: Annotated[bool, typer.Option("--trace", help="Print sanitized frame progress to stderr.")] = False,
     simulator: Annotated[bool, typer.Option("--simulator", help="Explicitly allow a localhost simulator.")] = False,
 ) -> None:
     """Read greeting, exchange client identification, and parse the configuration XML in memory."""
     try:
         with TouchMixClient(host, port, timeout=timeout, allow_loopback=simulator) as client:
-            config, faders = client.retrieve_configuration()
+            config, faders = client.retrieve_configuration(
+                trace=(lambda event: typer.echo(json.dumps(event), err=True)) if trace else None
+            )
             _print({"device": client.identify(), "configuration": config,
                     "faders": [
                         {"channel": f.channel, "channel_type": f.channel_type,
@@ -75,6 +78,7 @@ def fader(
     host: Annotated[str, typer.Option(help="Literal private IPv4 mixer address.")],
     port: Annotated[int, typer.Option(min=1, max=65535)] = DEFAULT_PORT,
     timeout: Annotated[float, typer.Option(min=0.25, max=60)] = 12.0,
+    trace: Annotated[bool, typer.Option("--trace", help="Print sanitized frame progress to stderr.")] = False,
     apply: Annotated[bool, typer.Option("--apply", help="Transmit one experimental fader frame; default is dry-run.")] = False,
     confirm_isolated: Annotated[bool, typer.Option("--confirm-isolated", help="Affirm this input is physically isolated and it is safe to move.")] = False,
     confirm_channel: Annotated[str | None, typer.Option(help="Repeat the exact input name to enable --apply.")] = None,
@@ -85,7 +89,9 @@ def fader(
         if apply and (not confirm_isolated or confirm_channel != channel):
             raise TouchMixError("--apply requires --confirm-isolated and matching --confirm-channel")
         with TouchMixClient(host, port, timeout=timeout, allow_loopback=simulator) as client:
-            config, faders = client.retrieve_configuration()
+            config, faders = client.retrieve_configuration(
+                trace=(lambda event: typer.echo(json.dumps(event), err=True)) if trace else None
+            )
             plan = plan_input_fader(channel, value, config, faders)
             if not apply:
                 _print({**plan, "sent": False, "verified": False,
