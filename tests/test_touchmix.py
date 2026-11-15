@@ -144,3 +144,47 @@ def test_cli_does_not_transmit_without_confirmations():
                                         "--value", "0.55", "--host", "192.168.1.2", "--apply"])
     assert result.exit_code == 1
     assert "--confirm-isolated" in result.output
+
+
+def test_trace_metadata_has_no_configuration_contents():
+    sim = TouchMixSimulator(port=0)
+    ready = threading.Event()
+    thread = threading.Thread(target=sim.serve_once, kwargs={"ready": ready}, daemon=True)
+    thread.start()
+    assert ready.wait(timeout=2)
+    events = []
+    with TouchMixClient("127.0.0.1", sim.port, allow_loopback=True) as client:
+        info, _ = client.retrieve_configuration(trace=events.append)
+        assert info["config_version"] == "3.0.12462"
+    thread.join(timeout=2)
+    assert events[0]["stage"] == "client_greeting_sent"
+    assert events[-1]["stage"] == "configuration_complete"
+    assert events[-1]["frames_by_kind"]["3/4"] >= 3
+    assert "xml" not in str(events).lower()
+
+
+def test_timeout_reports_frame_stage_without_sending_parameter_write():
+    ready = threading.Event()
+    port_holder = []
+    def silent_peer():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port_holder.append(listener.getsockname()[1])
+            ready.set()
+            conn, _ = listener.accept()
+            with conn:
+                conn.sendall(SERVER_GREETING)
+                try:
+                    recv_frame(conn)
+                except OSError:
+                    return
+                time.sleep(0.5)
+    thread = threading.Thread(target=silent_peer, daemon=True)
+    thread.start()
+    assert ready.wait(timeout=2)
+    with TouchMixClient("127.0.0.1", port_holder[0], timeout=0.3,
+                        allow_loopback=True) as client:
+        with pytest.raises(TouchMixError, match="Configuration timeout:.*frames_by_kind"):
+            client.retrieve_configuration()
+    thread.join(timeout=2)
