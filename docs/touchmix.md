@@ -57,6 +57,26 @@ configuration. It tells us whether the mixer returned a `2/2` acknowledgment,
 started `3/4` configuration chunks, or stayed silent. This does not send
 any fader command or guarantee that a future write is accepted.
 
+## Read-only observation after the first hardware transmissions
+
+Three independent test writes were transmitted on 2026-11-15, but did not
+receive verified application-level acknowledgements. The pre-write XML
+configuration snapshot for In 1 changed from approximately -18.537 to
+-10.647 dB between attempts. This alone does **not** establish that the
+software caused the change.
+
+The new observe command sends NO parameter-update frames. It downloads a
+configuration snapshot, announces a pause, and downloads a second snapshot:
+
+```powershell
+wcfi mixer touchmix observe --host 10.2.2.4 --channel "In 1" --samples 2 --interval 8
+```
+
+For a physical control-to-CLI correlation test, use an *isolated* input and
+move the actual console fader during the announced pause; compare its
+positions with the CLI's snapshot delta. The results are configuration
+snapshots, not proof of software-to-hardware write acceptance.
+
 ## Gated single-fader test
 
 By default this is **dry-run**: a plan is generated but no parameter-write frame is transmitted.
