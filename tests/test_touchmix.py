@@ -266,3 +266,56 @@ def test_observe_after_one_write_does_not_resend_or_claim_ack():
         assert result["reply_observation_seconds"] == 0.05
     thread.join(timeout=2)
     assert len(sim.received_writes) == 1
+
+
+def test_extra_captured_frame_layouts_decode_without_transmitting():
+    from wcfi_tools.mixer.touchmix_observation import summarize_frame
+
+    meter = summarize_frame(Frame(4, 2, struct.pack("<Hf", 244, 0.2088)))
+    assert meter["class"] == "single_value_candidate"
+    assert meter["candidate_index"] == 244
+    assert meter["float32_value"] == pytest.approx(0.2088)
+    req = summarize_frame(Frame(6, 1, struct.pack("<IH", 1, 8) + b"\x00" * 8))
+    resp = summarize_frame(Frame(7, 1, struct.pack("<IH", 1, 8) + b"\x00" * 8))
+    assert req["class"] == "grouped_request_candidate"
+    assert resp["class"] == "grouped_response_candidate"
+    assert req["word_count"] == resp["word_count"] == 2
+    session = summarize_frame(Frame(8, 3, b"\x00" * 12))
+    assert session["class"] == "session_message_candidate"
+    assert "value" not in str(resp)
+
+
+def test_grouped_frame_rejects_invalid_body():
+    from wcfi_tools.mixer.touchmix_observation import summarize_frame
+
+    with pytest.raises(TouchMixError):
+        summarize_frame(Frame(7, 1, struct.pack("<IH", 1, 8) + b"\x00" * 4))
+    with pytest.raises(TouchMixError):
+        summarize_frame(Frame(4, 2, b"\x00" * 7))
+
+
+def test_passive_listening_reads_frames_without_sends():
+    left, right = socket.socketpair()
+    left.settimeout(2)
+    try:
+        from wcfi_tools.mixer.touchmix import TouchMixClient
+        client = TouchMixClient("127.0.0.1", 58211, allow_loopback=True)
+        client.sock = left
+        right.sendall(Frame(4, 2, struct.pack("<Hf", 244, 0.22)).encode())
+        right.sendall(Frame(7, 1, struct.pack("<IH", 3, 4) + b"\x00" * 4).encode())
+        result = client.listen_server_frames(seconds=0.1)
+        assert result["read_only"] is True
+        assert result["frames_by_kind"] == {"4/2": 1, "7/1": 1}
+        assert result["examples"][0]["candidate_index"] == 244
+        assert result["examples"][1]["class"] == "grouped_response_candidate"
+    finally:
+        left.close()
+        right.close()
+
+
+def test_listen_cli_help_is_available():
+    from typer.testing import CliRunner
+    from wcfi_tools.commands.mixer import app
+    result = CliRunner().invoke(app, ["touchmix", "listen", "--help"])
+    assert result.exit_code == 0
+    assert "--seconds" in result.output
