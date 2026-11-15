@@ -244,7 +244,7 @@ def test_observe_is_read_only_and_reports_delta(monkeypatch):
     result = CliRunner().invoke(cmd.app, ["touchmix", "observe", "--host", "10.2.2.4",
                                              "--channel", "In 1", "--samples", "2", "--interval", "0"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["read_only"] is True
     assert data["changed_by_at_least_0_01_db"] is True
     assert abs(data["delta_db_first_to_last"] - 7.890388) < 1e-4
