@@ -31,6 +31,13 @@ The address above is only an example from the current local experiment. Inspect 
 
 ## Diagnostic: configuration timeout after an earlier successful read
 
+The driver originally required one specific file name, `NH4-config.xml.dscomp`.
+The mixer can send other named files, so current code accepts any conservatively
+matched `*-config.xml.dscomp` candidate and still validates its XML/schema.
+This is an unconfirmed explanation for the 2026-11-15 trace, not proof of
+the cause. Trace now reports anonymized file-start/completion markers (hash
+prefixes only, never raw file names).
+
 When a connection times out during configuration retrieval, **no parameter
 write has occurred**. Do not interpret a failed `--apply` invocation as a
 fader movement, and do not repeatedly retry experimental writes.
