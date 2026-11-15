@@ -149,3 +149,72 @@ Never commit actual PCAP/PCAPNG captures, .dscomp files, complete settings XML, 
 4. Capture readback/ack behavior and calibrate fader scale.
 5. Add Bonjour discovery and broaden simulator coverage.
 6. **Only checkpoint / merge after a real fader movement is confirmed.**
+
+
+## 2026-11-15 pause checkpoint — next onsite session
+
+**Reason for pause:** physical mixer is unavailable after the church visit.
+The hardware is not being claimed as controlled by WCFI-tools yet.
+
+### Confirmed during the physical session
+
+- Mixer: `QSCMixerMain`, model `TM30Pro`, config version `3.0.12462`
+- Service: Bonjour `_ds2inet._tcp`, `10.2.2.4:58210` on `MixerNetwork`
+- Native TCP greeting, client identification, zlib/XML configuration download, input-index parsing
+- Input 1: configuration parameter index `1227`; dry-run guarded write
+- Three `5/1` candidate writes were sent, but never physically confirmed
+- Operator explained the observed approximately 7.9 dB level increase was performed manually, **not by the native client**
+- Read-only snapshots were stable at approximately -10.64679 dB
+- The native driver has **no demonstrated successful fader control yet**
+
+### Offline 2026-11-15 follow-up patch (hardware not tested)
+
+- Decode `4/2` candidate index/float value messages (observed indexes 244–251).
+- Decode structural metadata from captured `6/1` requests, `7/1` replies and `8/3` setup messages.
+- No guessed session-message replay or network polling implemented.
+- New `wcfi mixer touchmix listen` command passively observes server
+  frames after a configuration download and reports type counts and
+  sanitized decoded examples. It sends **no control writes** and no
+  additional meter/query requests.
+- Offline tests validate the framing and passive path, but do not
+  establish actual live server message availability after the download.
+
+### Next church visit — initial read-only steps
+
+```powershell
+cd C:\dev\wcfi-tools
+git switch feature/native-touchmix30-experimental
+git pull --ff-only
+python -m pytest -q tests/test_touchmix.py
+wcfi mixer touchmix identify --host 10.2.2.4
+wcfi mixer touchmix inspect --host 10.2.2.4 --timeout 30 1>$null
+wcfi mixer touchmix listen --host 10.2.2.4 --timeout 30 --seconds 10
+```
+
+Watch only a physically isolated input. The `listen` command might show no
+events because it does not reproduce the iPhone client's periodic `6/1`
+requests. That is not evidence the mixer is unresponsive. Do not assume
+`4/2` values are fader readbacks.
+
+### Before next real write
+
+1. Confirm the input is physically disconnected or otherwise isolated from
+   all audible Main/Aux/monitor/recording paths.
+2. Confirm there is no active service or rehearsal; record the initial
+   physical position and restore it manually after the test.
+3. Determine whether registration and `8/3` or `6/1` messages are needed
+   for writes; inspect the original authorized capture offline.
+4. During a single test, check the *physical console* and capture any
+   post-write server messages. `sendall` and returned frame counts do not
+   count as successful control.
+5. **Only label a successful hardware-control checkpoint after a visible
+   fader movement attributable to WCFI-tools.**
+
+### Repository and privacy
+
+Keep this work on `feature/native-touchmix30-experimental`; do not merge
+to `dev` or `main` while hardware control remains unverified. Raw captures
+live outside the repo at `C:\dev\_captures\wcfi-tools\touchmix\`.
+Keep `*.pcapng`, compressed device settings, and full live configuration
+XML out of public Git history.
+
