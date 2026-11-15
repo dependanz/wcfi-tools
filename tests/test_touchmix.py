@@ -121,7 +121,7 @@ def test_simulator_handshake_and_fader_write():
 
 
 def test_rejects_public_mixer_address():
-    for host in ("8.8.8.8", "google.com", "::1"):
+    for host in ("8.8.8.8", "google.com", "::1", "0.0.0.0", "169.254.1.1"):
         with pytest.raises(TouchMixError):
             TouchMixClient(host)
 
